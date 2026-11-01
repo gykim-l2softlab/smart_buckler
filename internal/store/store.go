@@ -20,6 +20,8 @@ const (
 	ActionWouldBlock = "would_block"
 	// ActionDetected: rules matched below the blocking threshold.
 	ActionDetected = "detected"
+	// ActionTrapHit: a decoy path was requested and the session was blocked.
+	ActionTrapHit = "trap_hit"
 )
 
 // Event is a security event. It never contains request bodies, query strings
@@ -63,6 +65,16 @@ var migrations = []string{
 		rules      TEXT    NOT NULL  -- JSON array of {id, msg, severity}
 	);
 	CREATE INDEX events_ts ON events (ts);`,
+	`CREATE TABLE decoys (
+		path       TEXT    PRIMARY KEY,
+		created_at INTEGER NOT NULL -- unix milliseconds
+	);
+	CREATE TABLE blocks (
+		session_id TEXT    PRIMARY KEY,
+		until      INTEGER NOT NULL, -- unix milliseconds
+		reason     TEXT    NOT NULL,
+		created_at INTEGER NOT NULL
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

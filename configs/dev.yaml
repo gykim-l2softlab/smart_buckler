@@ -13,3 +13,15 @@ store:
 
 log:
   level: debug
+
+# Proxies in front of l2-buckler whose X-Forwarded-For is trusted (CIDR or IP).
+# Required when running behind another proxy or tunnel, otherwise a trap hit
+# would block the proxy address and every client behind it.
+trusted_proxies: []
+
+deception:
+  enabled: true
+  # How long a client that requested a decoy path stays blocked.
+  block_duration: 1h
+  # Real upstream path prefixes. Decoys never overlap them.
+  reserved_paths: []
