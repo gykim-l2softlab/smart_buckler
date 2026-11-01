@@ -71,14 +71,143 @@ report:
 - Authorization, Cookie, 비밀번호 필드는 로그에서 마스킹합니다.
 - 주민등록번호, 카드번호, 계좌번호, 전화번호 형태의 값은 로그와 리포트에서 마스킹합니다.
 
-## 시작하기
+## 설치
+
+Linux 서버에 단일 바이너리로 설치하는 방법입니다. 보호할 웹 서비스가 같은 서버의 `127.0.0.1:3000`에서 돌고 있다고 가정합니다.
+
+### 1. 빌드
+
+Go(버전은 `go.mod` 기준)가 있으면 어디서든 빌드할 수 있습니다. cgo를 쓰지 않으므로 다른 OS에서 Linux용으로 바로 빌드됩니다.
 
 ```sh
-make build
-./bin/l2-buckler -config configs/dev.yaml
+make build                                   # 지금 쓰는 OS용, bin/l2-buckler
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -trimpath -ldflags "-s -w" -o l2-buckler ./cmd/l2-buckler   # Linux x86_64용
 ```
 
-설정, 이벤트 확인, 관리 화면 사용법은 [시작하기 문서](docs/getting-started.md)에 있습니다.
+ARM 서버(`uname -m`이 `aarch64`)라면 `GOARCH=arm64`로 빌드하세요.
+
+### 2. 서버에 설치
+
+```sh
+sudo install -m 755 l2-buckler /usr/local/bin/l2-buckler
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin l2-buckler
+sudo mkdir -p /etc/l2-buckler /var/lib/l2-buckler
+sudo chown l2-buckler: /var/lib/l2-buckler
+```
+
+### 3. 설정
+
+`/etc/l2-buckler/l2-buckler.yaml`을 만듭니다. 적지 않은 항목은 기본값을 씁니다. 전체 항목과 설명은 [configs/dev.yaml](configs/dev.yaml)에 있습니다.
+
+```yaml
+listen: ":8080"                     # 사용자가 접속할 포트
+upstream: "http://127.0.0.1:3000"   # 보호할 서비스
+
+store:
+  path: "/var/lib/l2-buckler/l2-buckler.db"
+
+log:
+  level: info
+
+report:
+  timezone: "Asia/Seoul"
+
+admin:
+  enabled: true
+  listen: "127.0.0.1:8081"          # 관리 화면. 서버 안에서만 열립니다
+```
+
+알림 토큰이나 API 키를 넣는다면 다른 사용자가 읽지 못하게 권한을 좁힙니다.
+
+```sh
+sudo chown root:l2-buckler /etc/l2-buckler/l2-buckler.yaml
+sudo chmod 640 /etc/l2-buckler/l2-buckler.yaml
+```
+
+### 4. 관리자 비밀번호
+
+관리 화면은 비밀번호를 정하기 전까지 닫혀 있습니다. 12자 이상으로 두 번 입력합니다.
+
+```sh
+sudo -u l2-buckler l2-buckler admin-password -config /etc/l2-buckler/l2-buckler.yaml
+```
+
+### 5. 실행
+
+먼저 앞에 띄워서 확인합니다. 로그에 `l2-buckler started`와 `admin UI started`가 나오면 정상입니다.
+
+```sh
+sudo -u l2-buckler l2-buckler -config /etc/l2-buckler/l2-buckler.yaml
+```
+
+확인이 끝나면 systemd 서비스로 등록합니다. `/etc/systemd/system/l2-buckler.service`:
+
+```ini
+[Unit]
+Description=l2-buckler reverse proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=l2-buckler
+ExecStart=/usr/local/bin/l2-buckler -config /etc/l2-buckler/l2-buckler.yaml
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/l2-buckler
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now l2-buckler
+journalctl -u l2-buckler -f
+```
+
+### 6. 관리 화면 접속
+
+관리 화면은 서버 자신에게서만 열려 있습니다. 내 컴퓨터에서 SSH 터널을 연 뒤 브라우저로 `http://127.0.0.1:8081`에 접속합니다.
+
+```sh
+ssh -N -L 8081:127.0.0.1:8081 사용자@서버
+```
+
+TLS 리버스 프록시를 앞에 두고 도메인으로 접속하려면 그 호스트 이름을 `admin.hosts`에 적으세요.
+
+### 7. 동작 확인
+
+서버 안에서 아래 요청을 보내면 관리 화면의 이벤트와 차트에 기록이 나타납니다.
+
+```sh
+curl -s -o /dev/null http://127.0.0.1:8080/
+curl -s -o /dev/null "http://127.0.0.1:8080/?id=1%27%20OR%201=1--"   # WAF 차단 예정으로 기록
+```
+
+관리 화면의 **미끼** 메뉴에 있는 경로를 요청하면 그 주소가 바로 차단되고, **차단** 화면에서 풀 수 있습니다. 내 PC에서 시험하면 사무실 공인 IP가 막혀 같은 IP를 쓰는 사람도 함께 막히니, 서버 안에서 `127.0.0.1`로 시험하세요.
+
+### 문제가 생기면
+
+| 증상 | 확인할 것 |
+|---|---|
+| `address already in use` | `listen`이나 `admin.listen` 포트를 다른 프로세스가 쓰고 있습니다. |
+| 로그인 화면에 비밀번호가 없다고 나옴 | 4번을 같은 설정 파일(`-config`)로 실행했는지 확인하세요. 비밀번호는 `store.path`의 DB에 저장됩니다. |
+| 421 Misdirected Request | 허용되지 않은 호스트 이름으로 접속했습니다. 터널로 `127.0.0.1:8081`에 접속하거나 `admin.hosts`에 추가하세요. |
+| 로그인이 막힘 | 5번 실패하면 15분 동안 막힙니다. |
+| DB를 열 수 없다는 오류 | `/var/lib/l2-buckler`의 소유자가 `l2-buckler`인지 확인하세요. |
+
+WAF 차단 모드, 앞단 프록시(`trusted_proxies`), 미끼, 행위 점수, 알림, AI 요약 설정은 [시작하기 문서](docs/getting-started.md)에 있습니다.
+
+### 개발용 실행
+
+```sh
+make run                       # configs/dev.yaml로 실행
+make run CONFIG=다른설정.yaml
+```
 
 ## 로드맵
 
