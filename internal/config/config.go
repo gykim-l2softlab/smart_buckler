@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,12 +101,25 @@ type Report struct {
 	LLM      LLM    `yaml:"llm"`
 }
 
-// LLM configures an optional local Ollama model that adds a short summary.
+// LLM configures an optional model that adds a short summary. Only counts
+// and fixed labels are sent to it.
 type LLM struct {
-	Enabled bool          `yaml:"enabled"`
-	URL     string        `yaml:"url"`
-	Model   string        `yaml:"model"`
-	Timeout time.Duration `yaml:"timeout"`
+	Enabled bool `yaml:"enabled"`
+	// Provider is the API protocol: "openai" for any OpenAI-compatible chat
+	// completions API (Ollama, LM Studio, vLLM, hosted providers) or
+	// "anthropic" for the Claude Messages API.
+	Provider string `yaml:"provider"`
+	// URL is the API base. Empty: http://127.0.0.1:11434/v1 (local Ollama)
+	// for openai, https://api.anthropic.com/v1 for anthropic.
+	URL   string `yaml:"url"`
+	Model string `yaml:"model"`
+	// APIKey is sent as a bearer token. Required by hosted providers.
+	APIKey string `yaml:"api_key"`
+	// ReasoningEffort limits how long reasoning models think. openai: none,
+	// minimal, low, medium or high. anthropic: low, medium, high, xhigh or
+	// max. Empty leaves the model default, which can take minutes on a CPU.
+	ReasoningEffort string        `yaml:"reasoning_effort"`
+	Timeout         time.Duration `yaml:"timeout"`
 }
 
 // Notify configures report delivery channels. All are off by default.
@@ -172,7 +186,7 @@ func Default() Config {
 		},
 		Report: Report{
 			Time: "09:00",
-			LLM:  LLM{URL: "http://127.0.0.1:11434", Timeout: 2 * time.Minute},
+			LLM:  LLM{Provider: "openai", Timeout: 2 * time.Minute},
 		},
 		Notify: Notify{Email: Email{Port: 587}},
 		Store:  Store{Path: "l2-buckler.db"},
@@ -300,15 +314,9 @@ func (c *Config) validateReport() error {
 			return fmt.Errorf("report.timezone: %w", err)
 		}
 	}
-	if l := c.Report.LLM; l.Enabled {
-		if l.Model == "" {
-			return errors.New("report.llm.model is required when report.llm is enabled")
-		}
-		if err := httpURL(l.URL); err != nil {
-			return fmt.Errorf("report.llm.url: %w", err)
-		}
-		if l.Timeout <= 0 {
-			return errors.New("report.llm.timeout must be positive")
+	if c.Report.LLM.Enabled {
+		if err := c.Report.LLM.validate(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -352,6 +360,53 @@ func httpURL(s string) error {
 		return fmt.Errorf("must be an absolute http(s) URL, got %q", s)
 	}
 	return nil
+}
+
+var (
+	llmDefaultURL = map[string]string{"openai": "http://127.0.0.1:11434/v1", "anthropic": "https://api.anthropic.com/v1"}
+	llmEfforts    = map[string][]string{
+		"openai":    {"none", "minimal", "low", "medium", "high"},
+		"anthropic": {"low", "medium", "high", "xhigh", "max"},
+	}
+)
+
+func (l *LLM) validate() error {
+	def, ok := llmDefaultURL[l.Provider]
+	if !ok {
+		return fmt.Errorf("report.llm.provider must be openai or anthropic, got %q", l.Provider)
+	}
+	if l.URL == "" {
+		l.URL = def
+	}
+	if l.Model == "" {
+		return errors.New("report.llm.model is required when report.llm is enabled")
+	}
+	if err := httpURL(l.URL); err != nil {
+		return fmt.Errorf("report.llm.url: %w", err)
+	}
+	if l.Timeout <= 0 {
+		return errors.New("report.llm.timeout must be positive")
+	}
+	if l.ReasoningEffort != "" && !slices.Contains(llmEfforts[l.Provider], l.ReasoningEffort) {
+		return fmt.Errorf("report.llm.reasoning_effort %q must be one of %s for %s",
+			l.ReasoningEffort, strings.Join(llmEfforts[l.Provider], ", "), l.Provider)
+	}
+	if l.Provider == "anthropic" && l.APIKey == "" {
+		return errors.New("report.llm.api_key is required for the anthropic provider")
+	}
+	if u, _ := url.Parse(l.URL); l.APIKey != "" && u.Scheme != "https" && !isLoopback(u.Hostname()) {
+		return errors.New("report.llm.url must use https when api_key is set, so the key is not sent in clear text")
+	}
+	return nil
+}
+
+// isLoopback reports whether host names this machine.
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
 
 func validIPOrPrefix(s string) error {

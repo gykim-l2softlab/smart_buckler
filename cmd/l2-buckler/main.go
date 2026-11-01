@@ -131,7 +131,12 @@ func newReporter(cfg config.Config, st *store.Store, log *slog.Logger) (*report.
 		Log:       log,
 	}
 	if l := cfg.Report.LLM; l.Enabled {
-		o.LLM = &report.Ollama{URL: l.URL, Model: l.Model, Timeout: l.Timeout}
+		switch l.Provider {
+		case "anthropic":
+			o.LLM = &report.Anthropic{URL: l.URL, Model: l.Model, APIKey: l.APIKey, Effort: l.ReasoningEffort, Timeout: l.Timeout}
+		default:
+			o.LLM = &report.Chat{URL: l.URL, Model: l.Model, APIKey: l.APIKey, ReasoningEffort: l.ReasoningEffort, Timeout: l.Timeout}
+		}
 	}
 	return report.New(o)
 }

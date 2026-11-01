@@ -250,22 +250,51 @@ notify:
 
 `-send`로 보낸 요약은 `reports` 테이블에 남기지 않으므로 정해진 시각의 발송에는 영향이 없습니다.
 
-### 로컬 AI 요약 (선택)
+### AI 요약 (선택)
 
-[Ollama](https://ollama.com)를 같은 서버에서 쓰고 있다면, 요약 맨 앞에 AI가 쓴 두세 문장을 붙일 수 있습니다.
+요약 맨 앞에 AI가 쓴 두세 문장을 붙일 수 있습니다. `provider`로 API 형식을 고릅니다.
+
+- `openai`(기본): OpenAI 호환 API(`/v1/chat/completions`). 같은 서버의 [Ollama](https://ollama.com), LM Studio, vLLM 같은 로컬 모델과, 이 형식을 지원하는 외부 API에 쓸 수 있습니다.
+- `anthropic`: Claude Messages API.
+
+어떤 모델을 쓸지는 운영자가 정합니다. l2-buckler는 `model`과 `reasoning_effort`를 그대로 넘깁니다. 외부 라이브러리 없이 표준 라이브러리로 호출합니다.
+
+로컬 Ollama:
 
 ```yaml
 report:
   llm:
     enabled: true
-    url: "http://127.0.0.1:11434"
-    model: "qwen3:4b"      # ollama pull로 받아 둔 모델
+    provider: openai
+    model: "qwen3:4b"          # ollama pull로 받아 둔 모델
+    reasoning_effort: "none"   # 아래 설명 참고
     timeout: 2m
 ```
 
-- 모델에는 집계한 숫자, WAF 규칙 설명, 자동화 징후 이름만 보냅니다. 요청 경로나 IP처럼 공격자가 마음대로 넣을 수 있는 값은 보내지 않습니다. 공격자가 요청에 숨긴 문장으로 요약을 조작하지 못하게 하기 위해서입니다.
+Claude:
+
+```yaml
+report:
+  llm:
+    enabled: true
+    provider: anthropic
+    model: "claude-opus-5-5"
+    api_key: "<Anthropic API 키>"
+    reasoning_effort: "low"
+    timeout: 1m
+```
+
+`url`을 비워 두면 `openai`는 `http://127.0.0.1:11434/v1`, `anthropic`은 `https://api.anthropic.com/v1`을 씁니다. 다른 서버나 외부 OpenAI 호환 API를 쓸 때만 적어 주세요.
+
+- **보내는 내용**: 날짜, 집계 숫자, WAF 규칙 설명(CRS에 미리 정해진 영어 문구), 자동화 징후 이름만 보냅니다. 요청 경로, IP, User-Agent처럼 공격자가 마음대로 넣을 수 있는 값이나 개인정보는 보내지 않습니다. 공격자가 요청에 숨긴 문장으로 요약을 조작하지 못하게 하기 위해서이기도 합니다.
+- **외부 API를 쓸 때**: 제공사는 이 서버가 l2-buckler를 쓴다는 사실과 하루 공격 규모를 알게 됩니다. 데이터 보관 정책은 제공사마다 다르니 확인한 뒤 켜 주세요. 원격 주소에 API 키를 보낼 때는 `https`만 허용합니다. 키가 들어 있는 설정 파일은 `chmod 600`으로 보호하세요.
+- **`reasoning_effort`**: 추론 모델이 답하기 전에 생각하는 정도입니다. GPU 없이 CPU로 돌리면 생각 단계만으로 몇 분이 걸려 `timeout`을 넘길 수 있습니다.
+  - `openai`: `none`, `minimal`, `low`, `medium`, `high`. Ollama의 qwen3 등은 `"none"`으로 생각 단계를 끄고, gpt-oss는 끌 수 없으므로 `"low"`를 권장합니다.
+  - `anthropic`: `low`, `medium`, `high`, `xhigh`, `max`. 짧은 요약이므로 `"low"`면 충분합니다.
+  - 비워 두면 모델 기본값을 따릅니다.
 - AI 요약 아래에는 "정확한 내용은 아래 숫자를 기준으로 봐 주세요"라는 안내가 붙습니다. 숫자 목록은 AI를 거치지 않습니다.
-- Ollama가 응답하지 않거나 오류가 나면 AI 요약 없이 보냅니다.
+- 모델마다 지시를 따르는 정도가 다릅니다. 요약이 아래 숫자를 되풀이하기만 한다면 다른 모델을 써 보세요.
+- AI가 응답하지 않거나 오류가 나면 AI 요약 없이 보냅니다.
 - 아무 일도 없던 날에는 모델을 부르지 않습니다.
 
 ## 알려진 제약

@@ -53,11 +53,21 @@ report:
   time: "09:00"
   # IANA time zone for the schedule and day boundaries. Empty: host local time.
   timezone: "Asia/Seoul"
-  # Optional: a local Ollama model adds a short summary. Only counts are sent to it.
+  # Optional: an LLM adds a short summary. Only counts and fixed labels are
+  # sent to it, never paths, IPs or User-Agents.
   llm:
     enabled: false
-    url: "http://127.0.0.1:11434"
+    # openai: any OpenAI-compatible API (Ollama, LM Studio, vLLM, hosted).
+    # anthropic: Claude Messages API.
+    provider: openai
+    # Empty: http://127.0.0.1:11434/v1 for openai, https://api.anthropic.com/v1 for anthropic.
+    url: ""
     model: ""
+    api_key: ""          # hosted APIs; https is required for remote URLs
+    # Reasoning models can think for minutes on a CPU. openai: none, minimal,
+    # low, medium, high. anthropic: low, medium, high, xhigh, max.
+    # Empty: the model default.
+    reasoning_effort: ""
     timeout: 2m
 
 # Delivery channels. All off by default. Keep this file readable only by

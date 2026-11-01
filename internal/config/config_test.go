@@ -95,7 +95,7 @@ log:
 				"  telegram: {enabled: true, bot_token: \"1:a\", chat_id: \"-100\"}\n",
 			check: func(t *testing.T, c Config) {
 				if c.ReportAt() != 7*time.Hour+30*time.Minute || c.ReportLocation().String() != "Asia/Seoul" ||
-					c.Notify.Email.Port != 587 || c.Report.LLM.URL != "http://127.0.0.1:11434" {
+					c.Notify.Email.Port != 587 || c.Report.LLM.URL != "http://127.0.0.1:11434/v1" {
 					t.Errorf("report = %v %v %+v", c.ReportAt(), c.ReportLocation(), c.Notify.Email)
 				}
 			},
@@ -103,6 +103,25 @@ log:
 		{name: "bad report time", yaml: "upstream: http://a\nreport:\n  time: \"9am\"\n", wantErr: "report.time"},
 		{name: "bad timezone", yaml: "upstream: http://a\nreport:\n  timezone: Mars/Base\n", wantErr: "report.timezone"},
 		{name: "llm without model", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true}\n", wantErr: "report.llm.model"},
+		{name: "llm reasoning effort", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, model: m, reasoning_effort: none}\n",
+			check: func(t *testing.T, c Config) {
+				if c.Report.LLM.ReasoningEffort != "none" {
+					t.Errorf("reasoning_effort = %q", c.Report.LLM.ReasoningEffort)
+				}
+			}},
+		{name: "llm bad reasoning effort", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, model: m, reasoning_effort: max}\n", wantErr: "reasoning_effort"},
+		{name: "llm key over http", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, model: m, url: \"http://api.example.com/v1\", api_key: k}\n", wantErr: "https"},
+		{name: "llm key to local http", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, model: m, url: \"http://127.0.0.1:1234/v1\", api_key: k}\n"},
+		{name: "llm key over https", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, model: m, url: \"https://api.example.com/v1\", api_key: k}\n"},
+		{name: "llm anthropic", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: anthropic, model: claude-opus-5-5, api_key: k, reasoning_effort: xhigh}\n",
+			check: func(t *testing.T, c Config) {
+				if c.Report.LLM.URL != "https://api.anthropic.com/v1" {
+					t.Errorf("url = %q", c.Report.LLM.URL)
+				}
+			}},
+		{name: "llm anthropic without key", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: anthropic, model: m}\n", wantErr: "api_key"},
+		{name: "llm anthropic effort none", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: anthropic, model: m, api_key: k, reasoning_effort: none}\n", wantErr: "reasoning_effort"},
+		{name: "llm bad provider", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: gemini, model: m}\n", wantErr: "provider"},
 		{name: "email without to", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: a@b.c}\n", wantErr: "notify.email.to"},
 		{name: "email bad address", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: nope, to: [a@b.c]}\n", wantErr: "bad address"},
 		{name: "slack over http", yaml: "upstream: http://a\nnotify:\n  slack: {enabled: true, webhook_url: \"http://x/y\"}\n", wantErr: "https"},
