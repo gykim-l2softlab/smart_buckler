@@ -1,7 +1,7 @@
 # 시작하기
 
 이 문서는 l2-buckler를 빌드하고 웹 서비스 앞에 두는 방법을 설명합니다.
-현재 3단계(리버스 프록시, WAF, 이벤트 기록, 미끼 경로, 행위 점수와 챌린지)까지 구현되어 있습니다.
+현재 4단계(리버스 프록시, WAF, 이벤트 기록, 미끼 경로, 행위 점수와 챌린지, 일일 요약과 알림)까지 구현되어 있습니다.
 
 ## 빌드
 
@@ -39,6 +39,12 @@ challenge:
 waf:
   mode: detect                       # detect 또는 block
   request_body_limit: 1048576        # 검사할 요청 본문 크기(바이트)
+
+report:
+  time: "09:00"                      # 전날 요약을 보낼 시각
+  timezone: ""                       # 예: Asia/Seoul. 비우면 서버의 시간대
+
+notify: {}                           # 알림 채널. 아래 "일일 요약과 알림" 참고
 
 store:
   path: "l2-buckler.db"              # 이벤트를 저장할 SQLite 파일
@@ -189,9 +195,83 @@ sqlite3 l2-buckler.db \
 - WAF 규칙에 걸린 실제 요청 값도 저장하지 않습니다. 규칙 번호와 설명만 남깁니다.
 - 경로에 9자리 이상 이어진 숫자가 있으면 `[REDACTED]`로 바꿔 저장합니다. 주민등록번호, 카드번호, 계좌번호, 전화번호를 가리기 위해서입니다.
 
+## 일일 요약과 알림
+
+매일 `report.time`에 전날 하루 동안의 요약을 만들어 켜 둔 채널로 보냅니다. 요약에는 다음 내용이 들어갑니다.
+
+- 미끼에 접근해 차단한 클라이언트 수, 챌린지를 받은 클라이언트 수와 그중 통과한 수, WAF가 막았거나 막았을 요청 수
+- 가장 많이 걸린 클라이언트 IP, 가장 많이 노린 경로, 자주 걸린 WAF 규칙, 자주 나타난 자동화 징후 (각각 상위 5개)
+- 챌린지를 통과한 비율이 높으면 사람이 걸렸을 수 있다는 안내
+
+아무 일도 없던 날에도 "따로 알릴 일이 없었습니다"라는 요약을 보냅니다. l2-buckler가 살아 있다는 확인이 되기 때문입니다.
+
+만든 요약은 SQLite의 `reports` 테이블에 날짜별로 남습니다. 같은 날의 요약은 한 번만 보내므로 재시작해도 중복으로 받지 않습니다. 발송 시각이 지난 뒤에 l2-buckler를 시작하면 놓친 전날 요약을 바로 보냅니다.
+
+### 알림 채널
+
+채널은 모두 꺼져 있고, 켠 채널로만 보냅니다. 한 채널이 실패해도 나머지 채널로는 보냅니다.
+
+```yaml
+notify:
+  email:
+    enabled: true
+    host: "smtp.example.com"
+    port: 587              # 465는 처음부터 TLS, 그 밖의 포트는 서버가 지원하면 STARTTLS
+    username: "security@example.com"
+    password: "앱 비밀번호"
+    from: "l2-buckler <security@example.com>"
+    to: ["ops@example.com"]
+  slack:
+    enabled: true
+    webhook_url: "https://hooks.slack.com/services/..."   # Incoming Webhook 주소
+  telegram:
+    enabled: true
+    bot_token: "123456:ABC..."   # BotFather에서 받은 토큰
+    chat_id: "-1001234567890"    # 메시지를 받을 대화방 ID
+```
+
+비밀번호와 토큰이 들어가므로 설정 파일은 l2-buckler 실행 계정만 읽을 수 있게 두세요(`chmod 600`). 이메일 비밀번호는 TLS 연결에서만 보냅니다(서버가 localhost인 경우는 예외).
+
+요약에는 클라이언트 IP와 요청 경로가 들어갑니다. 알림을 받는 사람과 채널을 정할 때 참고하세요.
+
+설정을 마쳤으면 테스트 메시지로 확인합니다.
+
+```sh
+./bin/l2-buckler notify-test -config l2-buckler.yaml
+```
+
+### 요약 미리 보기와 직접 보내기
+
+```sh
+./bin/l2-buckler report -config l2-buckler.yaml                    # 어제 요약을 화면에 출력
+./bin/l2-buckler report -config l2-buckler.yaml -date 2026-10-31   # 특정 날짜
+./bin/l2-buckler report -config l2-buckler.yaml -send              # 켜 둔 채널로 보내기
+```
+
+`-send`로 보낸 요약은 `reports` 테이블에 남기지 않으므로 정해진 시각의 발송에는 영향이 없습니다.
+
+### 로컬 AI 요약 (선택)
+
+[Ollama](https://ollama.com)를 같은 서버에서 쓰고 있다면, 요약 맨 앞에 AI가 쓴 두세 문장을 붙일 수 있습니다.
+
+```yaml
+report:
+  llm:
+    enabled: true
+    url: "http://127.0.0.1:11434"
+    model: "qwen3:4b"      # ollama pull로 받아 둔 모델
+    timeout: 2m
+```
+
+- 모델에는 집계한 숫자, WAF 규칙 설명, 자동화 징후 이름만 보냅니다. 요청 경로나 IP처럼 공격자가 마음대로 넣을 수 있는 값은 보내지 않습니다. 공격자가 요청에 숨긴 문장으로 요약을 조작하지 못하게 하기 위해서입니다.
+- AI 요약 아래에는 "정확한 내용은 아래 숫자를 기준으로 봐 주세요"라는 안내가 붙습니다. 숫자 목록은 AI를 거치지 않습니다.
+- Ollama가 응답하지 않거나 오류가 나면 AI 요약 없이 보냅니다.
+- 아무 일도 없던 날에는 모델을 부르지 않습니다.
+
 ## 알려진 제약
 
 - 차단과 점수의 단위는 IP 주소입니다. 회사나 통신사 NAT처럼 여러 사람이 한 주소를 함께 쓰면, 그중 한 명이 미끼에 접근했을 때 모두 `block_duration` 동안 막힙니다. 점수도 함께 쌓이므로 사용자가 많은 NAT 뒤에서는 챌린지가 나올 수 있습니다.
 - 행위 기록은 메모리에만 있어서 재시작하면 사라집니다. 기억하는 클라이언트 수는 최대 1만 개입니다.
 - IP 주소로 직접 접속하면 CRS 920350 규칙("Host header is a numeric IP address")이 `detected`로 기록됩니다. 차단 기준에는 못 미치는 경고입니다.
 - 업스트림 응답은 검사하지 않습니다.
+- 요약 문구는 현재 한국어만 있습니다.

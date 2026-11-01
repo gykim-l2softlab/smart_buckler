@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/mail"
 	"net/netip"
 	"net/url"
 	"os"
@@ -41,11 +42,15 @@ type Config struct {
 	Deception      Deception `yaml:"deception"`
 	Score          Score     `yaml:"score"`
 	Challenge      Challenge `yaml:"challenge"`
+	Report         Report    `yaml:"report"`
+	Notify         Notify    `yaml:"notify"`
 	Store          Store     `yaml:"store"`
 	Log            Log       `yaml:"log"`
 
 	upstreamURL *url.URL
 	logLevel    slog.Level
+	reportLoc   *time.Location
+	reportAt    time.Duration
 }
 
 // WAF configures the Coraza engine.
@@ -85,6 +90,55 @@ type Challenge struct {
 	PassDuration time.Duration `yaml:"pass_duration"`
 }
 
+// Report configures the daily summary.
+type Report struct {
+	// Time is the daily send time, "HH:MM" in Timezone.
+	Time string `yaml:"time"`
+	// Timezone is an IANA name such as "Asia/Seoul". Empty means the host's
+	// local time zone. Report days are counted in this zone.
+	Timezone string `yaml:"timezone"`
+	LLM      LLM    `yaml:"llm"`
+}
+
+// LLM configures an optional local Ollama model that adds a short summary.
+type LLM struct {
+	Enabled bool          `yaml:"enabled"`
+	URL     string        `yaml:"url"`
+	Model   string        `yaml:"model"`
+	Timeout time.Duration `yaml:"timeout"`
+}
+
+// Notify configures report delivery channels. All are off by default.
+type Notify struct {
+	Email    Email    `yaml:"email"`
+	Slack    Slack    `yaml:"slack"`
+	Telegram Telegram `yaml:"telegram"`
+}
+
+// Email configures SMTP delivery.
+type Email struct {
+	Enabled  bool     `yaml:"enabled"`
+	Host     string   `yaml:"host"`
+	Port     int      `yaml:"port"`
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"`
+	From     string   `yaml:"from"`
+	To       []string `yaml:"to"`
+}
+
+// Slack configures an incoming webhook.
+type Slack struct {
+	Enabled    bool   `yaml:"enabled"`
+	WebhookURL string `yaml:"webhook_url"`
+}
+
+// Telegram configures a bot.
+type Telegram struct {
+	Enabled  bool   `yaml:"enabled"`
+	BotToken string `yaml:"bot_token"`
+	ChatID   string `yaml:"chat_id"`
+}
+
 // Store configures the SQLite event store.
 type Store struct {
 	Path string `yaml:"path"`
@@ -116,8 +170,13 @@ func Default() Config {
 			Difficulty:   16,
 			PassDuration: 24 * time.Hour,
 		},
-		Store: Store{Path: "l2-buckler.db"},
-		Log:   Log{Level: "info"},
+		Report: Report{
+			Time: "09:00",
+			LLM:  LLM{URL: "http://127.0.0.1:11434", Timeout: 2 * time.Minute},
+		},
+		Notify: Notify{Email: Email{Port: 587}},
+		Store:  Store{Path: "l2-buckler.db"},
+		Log:    Log{Level: "info"},
 	}
 }
 
@@ -212,12 +271,85 @@ func (c *Config) validate() error {
 		return errors.New("challenge.pass_duration must be positive")
 	}
 
+	if err := c.validateReport(); err != nil {
+		return err
+	}
+	if err := c.Notify.validate(); err != nil {
+		return err
+	}
+
 	if c.Store.Path == "" {
 		return errors.New("store.path is required")
 	}
 
 	if err := c.logLevel.UnmarshalText([]byte(c.Log.Level)); err != nil {
 		return fmt.Errorf("log.level: %w", err)
+	}
+	return nil
+}
+
+func (c *Config) validateReport() error {
+	at, err := time.Parse("15:04", c.Report.Time)
+	if err != nil {
+		return fmt.Errorf("report.time must be HH:MM, got %q", c.Report.Time)
+	}
+	c.reportAt = time.Duration(at.Hour())*time.Hour + time.Duration(at.Minute())*time.Minute
+	c.reportLoc = time.Local
+	if c.Report.Timezone != "" {
+		if c.reportLoc, err = time.LoadLocation(c.Report.Timezone); err != nil {
+			return fmt.Errorf("report.timezone: %w", err)
+		}
+	}
+	if l := c.Report.LLM; l.Enabled {
+		if l.Model == "" {
+			return errors.New("report.llm.model is required when report.llm is enabled")
+		}
+		if err := httpURL(l.URL); err != nil {
+			return fmt.Errorf("report.llm.url: %w", err)
+		}
+		if l.Timeout <= 0 {
+			return errors.New("report.llm.timeout must be positive")
+		}
+	}
+	return nil
+}
+
+func (n Notify) validate() error {
+	if e := n.Email; e.Enabled {
+		if e.Host == "" {
+			return errors.New("notify.email.host is required")
+		}
+		if e.Port < 1 || e.Port > 65535 {
+			return fmt.Errorf("notify.email.port out of range: %d", e.Port)
+		}
+		if len(e.To) == 0 {
+			return errors.New("notify.email.to needs at least one address")
+		}
+		for _, a := range append([]string{e.From}, e.To...) {
+			if _, err := mail.ParseAddress(a); err != nil {
+				return fmt.Errorf("notify.email: bad address %q: %w", a, err)
+			}
+		}
+	}
+	if s := n.Slack; s.Enabled {
+		u, err := url.Parse(s.WebhookURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" {
+			return errors.New("notify.slack.webhook_url must be an https URL")
+		}
+	}
+	if t := n.Telegram; t.Enabled && (t.BotToken == "" || t.ChatID == "") {
+		return errors.New("notify.telegram needs bot_token and chat_id")
+	}
+	return nil
+}
+
+func httpURL(s string) error {
+	u, err := url.Parse(s)
+	if err != nil {
+		return err
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("must be an absolute http(s) URL, got %q", s)
 	}
 	return nil
 }
@@ -236,3 +368,10 @@ func (c Config) UpstreamURL() *url.URL { return c.upstreamURL }
 
 // LogLevel returns the parsed log level. Valid only after Parse succeeds.
 func (c Config) LogLevel() slog.Level { return c.logLevel }
+
+// ReportLocation returns the report time zone. Valid only after Parse succeeds.
+func (c Config) ReportLocation() *time.Location { return c.reportLoc }
+
+// ReportAt returns the daily send time as an offset from midnight. Valid only
+// after Parse succeeds.
+func (c Config) ReportAt() time.Duration { return c.reportAt }
