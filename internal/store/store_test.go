@@ -155,3 +155,51 @@ func TestRecorderDropsWhenFull(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestEventScoreAndSignals(t *testing.T) {
+	s := openTemp(t)
+	if err := s.InsertEvents(context.Background(), []Event{
+		{Time: time.Now(), RequestID: "c1", Action: ActionChallenged, Score: 12, Signals: []string{"high_404", "path_enumeration"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		score   int
+		signals string
+	)
+	if err := s.db.QueryRow("SELECT score, signals FROM events WHERE request_id = 'c1'").Scan(&score, &signals); err != nil {
+		t.Fatal(err)
+	}
+	if score != 12 || signals != `["high_404","path_enumeration"]` {
+		t.Errorf("score=%d signals=%s", score, signals)
+	}
+}
+
+func TestSecretIsStable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.db")
+	ctx := context.Background()
+	s1, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s1.Secret(ctx, "challenge", 32)
+	if err != nil || len(a) != 32 {
+		t.Fatalf("secret: %v len %d", err, len(a))
+	}
+	b, _ := s1.Secret(ctx, "challenge", 32)
+	other, _ := s1.Secret(ctx, "other", 32)
+	_ = s1.Close()
+
+	s2, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s2.Close() }()
+	c, _ := s2.Secret(ctx, "challenge", 32)
+	if string(a) != string(b) || string(a) != string(c) {
+		t.Error("secret changed")
+	}
+	if string(a) == string(other) {
+		t.Error("different names share a secret")
+	}
+}

@@ -414,3 +414,51 @@ func TestModifyResponseRobots(t *testing.T) {
 		})
 	}
 }
+
+func TestUpstreamDisallows(t *testing.T) {
+	robots := `User-agent: Googlebot
+Disallow: /only-google/
+
+User-agent: *
+User-agent: Bingbot
+Disallow: /search
+Disallow: /cart$
+Disallow: /*.pdf$
+Disallow: /private/
+Allow: /private/public/
+Disallow: /tmp/*/cache
+`
+	r := parseRobotsRules(robots)
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/search", true},
+		{"/search?q=x", true},
+		{"/searching", true},
+		{"/cart", true},
+		{"/cart/items", false},
+		{"/docs/a.pdf", true},
+		{"/docs/a.pdf.html", false},
+		{"/private/x", true},
+		{"/private/public/x", false},
+		{"/tmp/a/cache/1", true},
+		{"/only-google/", false},
+		{"/", false},
+	}
+	for _, tt := range tests {
+		if got := r.disallows(tt.path); got != tt.want {
+			t.Errorf("disallows(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+
+	d := testDeception(t0, t0)
+	if d.UpstreamDisallows("/search") {
+		t.Error("disallowed before robots.txt was fetched")
+	}
+	resp := htmlResponse(t, "GET", "/robots.txt", []byte(robots), http.Header{"Content-Type": {"text/plain"}})
+	_ = d.ModifyResponse(discard())(resp)
+	if !d.UpstreamDisallows("/search") || d.UpstreamDisallows("/admin-backup-k7f3q2/") {
+		t.Error("upstream rules not captured, or decoys mixed in")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/proxy"
 	"github.com/gykim-l2softlab/smart_buckler/internal/response"
+	"github.com/gykim-l2softlab/smart_buckler/internal/score"
 	"github.com/gykim-l2softlab/smart_buckler/internal/session"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
@@ -79,6 +81,24 @@ func run(configPath string) error {
 		log.Info("decoys active", "paths", paths)
 	}
 
+	tracker, err := score.NewTracker(score.Config{
+		Weights:     cfg.Score.Weights,
+		Window:      score.DefaultWindow,
+		MaxEntries:  score.DefaultMaxEntries,
+		MaxSessions: score.DefaultMaxSessions,
+	}, time.Now)
+	if err != nil {
+		return err
+	}
+	secret, err := st.Secret(ctx, "challenge", 32)
+	if err != nil {
+		return err
+	}
+	challenger, err := response.NewChallenger(secret, cfg.Challenge.Difficulty, cfg.Challenge.PassDuration, time.Now)
+	if err != nil {
+		return err
+	}
+
 	handler := proxy.New(proxy.Options{
 		Upstream:      cfg.UpstreamURL(),
 		Sessions:      sessions,
@@ -86,6 +106,10 @@ func run(configPath string) error {
 		Deception:     dec,
 		BlockDuration: cfg.Deception.BlockDuration,
 		Inspector:     engine,
+		Tracker:       tracker,
+		Threshold:     cfg.Score.Threshold,
+		Challenger:    challenger,
+		Challenge:     cfg.Score.Mode == config.ScoreModeChallenge,
 		Recorder:      recorder,
 		Log:           log,
 	})
@@ -98,9 +122,14 @@ func run(configPath string) error {
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 
+	// Bind before logging "started" so a busy port fails loudly at startup.
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- srv.ListenAndServe() }()
-	log.Info("l2-buckler started", "listen", cfg.Listen, "upstream", cfg.UpstreamURL().String(), "waf_mode", cfg.WAF.Mode)
+	go func() { serveErr <- srv.Serve(ln) }()
+	log.Info("l2-buckler started", "listen", cfg.Listen, "upstream", cfg.UpstreamURL().String(), "waf_mode", cfg.WAF.Mode, "score_mode", cfg.Score.Mode)
 
 	select {
 	case err := <-serveErr:

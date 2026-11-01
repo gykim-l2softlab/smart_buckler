@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,12 @@ func benchDeception(b *testing.B) *deception.Deception {
 }
 
 func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
+
+// clientAddr spreads benchmark requests over many clients, as in production;
+// a single client hammering pages would rightly be challenged.
+func clientAddr(i int) string {
+	return fmt.Sprintf("10.%d.%d.%d:1234", (i>>16)&0xff, (i>>8)&0xff, i&0xff)
+}
 
 type nopRecorder struct{ fakeRecorder }
 
@@ -50,8 +57,11 @@ func benchHandler(b *testing.B, insp Inspector) {
 	h := newHandlerWith(b, up, insp, &nopRecorder{}, benchDeception(b), nil)
 
 	b.ResetTimer()
+	i := 0
 	for b.Loop() {
+		i++
 		r := httptest.NewRequest(http.MethodGet, "/board?page=2&sort=recent", nil)
+		r.RemoteAddr = clientAddr(i)
 		r.Header.Set("User-Agent", "Mozilla/5.0")
 		r.Header.Set("Accept", "text/html")
 		w := httptest.NewRecorder()
@@ -88,8 +98,11 @@ func BenchmarkHTMLInjection(b *testing.B) {
 	} {
 		b.Run(tc.name, func(b *testing.B) {
 			h := newHandlerWith(b, up, &fakeInspector{}, &nopRecorder{}, tc.dec(), nil)
+			i := 0
 			for b.Loop() {
+				i++
 				r := httptest.NewRequest(http.MethodGet, "/", nil)
+				r.RemoteAddr = clientAddr(i)
 				r.Header.Set("Accept-Encoding", "gzip")
 				w := httptest.NewRecorder()
 				h.ServeHTTP(w, r)

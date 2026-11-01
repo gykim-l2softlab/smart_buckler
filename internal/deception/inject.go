@@ -82,6 +82,7 @@ func (d *Deception) rewriteRobots(resp *http.Response, log *slog.Logger) {
 		upstream = string(b)
 	}
 	_ = resp.Body.Close()
+	d.upstreamRobots.Store(parseRobotsRules(upstream))
 
 	body := d.Robots(upstream)
 	resp.StatusCode = http.StatusOK

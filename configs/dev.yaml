@@ -25,3 +25,25 @@ deception:
   block_duration: 1h
   # Real upstream path prefixes. Decoys never overlap them.
   reserved_paths: []
+
+score:
+  # challenge: serve a proof-of-work challenge to page navigations over the threshold.
+  # detect: record would_challenge events only.
+  mode: challenge
+  threshold: 10
+  # Listed weights override the defaults; 0 disables a signal.
+  weights:
+    html_only: 3
+    high_404: 6
+    path_enumeration: 6
+    fast_requests: 6
+    regular_interval: 4
+    robots_disallowed: 10
+    error_retry: 5
+    waf_anomaly: 10
+
+challenge:
+  # Leading zero bits of SHA-256. 16 takes well under a second in a browser.
+  difficulty: 16
+  # How long a solved challenge exempts the client.
+  pass_duration: 24h

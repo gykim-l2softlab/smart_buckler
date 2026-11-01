@@ -11,13 +11,21 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
 )
 
+// fixtureReq is a fixture request and the delay before it, taken from the
+// X-Fixture-Delay header (removed before the request is served).
+type fixtureReq struct {
+	*http.Request
+	delay time.Duration
+}
+
 // readFixture parses a file of concatenated raw HTTP/1.1 requests.
-func readFixture(t *testing.T, path string) []*http.Request {
+func readFixture(t *testing.T, path string) []fixtureReq {
 	t.Helper()
 	f, err := os.Open(path)
 	if err != nil {
@@ -25,7 +33,7 @@ func readFixture(t *testing.T, path string) []*http.Request {
 	}
 	defer f.Close()
 
-	var reqs []*http.Request
+	var reqs []fixtureReq
 	br := bufio.NewReader(f)
 	for {
 		r, err := http.ReadRequest(br)
@@ -44,7 +52,14 @@ func readFixture(t *testing.T, path string) []*http.Request {
 		sr.Header = r.Header
 		sr.Host = r.Host
 		sr.RemoteAddr = "198.51.100.20:40000"
-		reqs = append(reqs, sr)
+		var delay time.Duration
+		if d := sr.Header.Get("X-Fixture-Delay"); d != "" {
+			if delay, err = time.ParseDuration(d); err != nil {
+				t.Fatalf("%s: request %d: bad X-Fixture-Delay: %v", path, len(reqs)+1, err)
+			}
+			sr.Header.Del("X-Fixture-Delay")
+		}
+		reqs = append(reqs, fixtureReq{Request: sr, delay: delay})
 	}
 	if len(reqs) == 0 {
 		t.Fatalf("%s: no requests", path)
@@ -80,7 +95,7 @@ func TestIntegrationBenignNotBlocked(t *testing.T) {
 			reqs := readFixture(t, path)
 			for i, r := range reqs {
 				w := httptest.NewRecorder()
-				h.ServeHTTP(w, r)
+				h.ServeHTTP(w, r.Request)
 				if w.Code == http.StatusForbidden {
 					t.Errorf("request %d %s %s blocked", i+1, r.Method, r.URL)
 				}
@@ -103,7 +118,7 @@ func TestIntegrationAttacksBlocked(t *testing.T) {
 			reqs := readFixture(t, path)
 			for i, r := range reqs {
 				w := httptest.NewRecorder()
-				h.ServeHTTP(w, r)
+				h.ServeHTTP(w, r.Request)
 				if w.Code != http.StatusForbidden {
 					t.Errorf("request %d %s %s not blocked (status %d)", i+1, r.Method, r.URL, w.Code)
 				}
@@ -118,6 +133,60 @@ func TestIntegrationAttacksBlocked(t *testing.T) {
 			for _, e := range evs {
 				if e.Action != store.ActionBlocked {
 					t.Errorf("event action = %s, want blocked", e.Action)
+				}
+			}
+		})
+	}
+}
+
+// replay serves a fixture with the fake clock advanced by each delay.
+func replay(h http.Handler, clk *fakeClock, reqs []fixtureReq) []*httptest.ResponseRecorder {
+	var out []*httptest.ResponseRecorder
+	for _, r := range reqs {
+		clk.advance(r.delay)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r.Request)
+		out = append(out, w)
+	}
+	return out
+}
+
+// People must never be challenged: every benign sequence stays below the threshold.
+func TestIntegrationBenignNotChallenged(t *testing.T) {
+	for _, path := range fixtures(t, "benign") {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			rec := &fakeRecorder{}
+			h, clk := scoreHandler(t, siteUpstream(t), rec, true)
+			for i, w := range replay(h, clk, readFixture(t, path)) {
+				if isChallenge(w) {
+					t.Errorf("request %d challenged", i+1)
+				}
+			}
+			for _, e := range rec.all() {
+				if e.Action == store.ActionChallenged || e.Action == store.ActionWouldChallenge {
+					t.Errorf("score event on benign traffic: %+v", e)
+				}
+			}
+		})
+	}
+}
+
+// Every bot sequence must be challenged at least once.
+func TestIntegrationBotsChallenged(t *testing.T) {
+	for _, path := range fixtures(t, "bots") {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			rec := &fakeRecorder{}
+			h, clk := scoreHandler(t, siteUpstream(t), rec, true)
+			challenged := false
+			for _, w := range replay(h, clk, readFixture(t, path)) {
+				challenged = challenged || isChallenge(w)
+			}
+			if !challenged {
+				t.Error("never challenged")
+			}
+			for _, e := range rec.all() {
+				if e.Action == store.ActionChallenged {
+					t.Logf("score %d, signals %v", e.Score, e.Signals)
 				}
 			}
 		})

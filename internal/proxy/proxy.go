@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/redact"
 	"github.com/gykim-l2softlab/smart_buckler/internal/response"
+	"github.com/gykim-l2softlab/smart_buckler/internal/score"
 	"github.com/gykim-l2softlab/smart_buckler/internal/session"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
@@ -43,8 +45,17 @@ type Options struct {
 	// BlockDuration applies to sessions that request a decoy.
 	BlockDuration time.Duration
 	Inspector     Inspector
-	Recorder      Recorder
-	Log           *slog.Logger
+	Tracker       *score.Tracker
+	// Threshold is the score at which a session is challenged.
+	Threshold  int
+	Challenger *response.Challenger
+	// Challenge serves challenges; when false, over-threshold sessions are
+	// only recorded (score.mode: detect).
+	Challenge bool
+	Recorder  Recorder
+	Log       *slog.Logger
+	// Now defaults to time.Now.
+	Now func() time.Time
 }
 
 // Handler is the reverse proxy with the request pipeline.
@@ -55,6 +66,9 @@ type Handler struct {
 
 // New builds a Handler.
 func New(o Options) *Handler {
+	if o.Now == nil {
+		o.Now = time.Now
+	}
 	h := &Handler{Options: o}
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -83,13 +97,21 @@ func New(o Options) *Handler {
 }
 
 // ServeHTTP runs the pipeline in the order fixed by the design:
-// session, blocklist, deception, WAF, upstream, response processing.
+// session, blocklist, deception, WAF, score, response decision, upstream,
+// response processing.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := h.Sessions.ClientIP(r)
 
 	if h.Blocklist.Blocked(clientIP) {
 		// Not recorded: a blocked bot can send thousands of requests.
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	if r.URL.Path == response.PoWPath {
+		if h.Challenger.Verify(w, r, clientIP) {
+			h.record(r, clientIP, store.Event{Status: http.StatusSeeOther, Action: store.ActionChallengePassed})
+		}
 		return
 	}
 
@@ -103,16 +125,85 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if verdict.Interrupted {
 		h.record(r, clientIP, wafEvent(verdict, verdict.Status))
+		h.observe(r, clientIP, verdict.Status, "", true)
 		denyWithID(w, verdict.Status, verdict.TxID)
+		return
+	}
+
+	if h.challenge(w, r, clientIP) {
 		return
 	}
 
 	sw := &statusWriter{ResponseWriter: w}
 	h.upstream.ServeHTTP(sw, r)
 
+	h.observe(r, clientIP, sw.statusCode(), sw.Header().Get("Content-Type"), verdict.WouldBlock())
 	if len(verdict.Matches) > 0 {
 		h.record(r, clientIP, wafEvent(verdict, sw.statusCode()))
 	}
+}
+
+// challenge scores the session's previous requests. Over the threshold, page
+// navigations get a proof-of-work challenge (in challenge mode); other
+// requests pass, because only a browser page can solve it. It reports whether
+// a challenge was served.
+func (h *Handler) challenge(w http.ResponseWriter, r *http.Request, clientIP string) bool {
+	res := h.Tracker.Evaluate(clientIP)
+	if res.Score < h.Threshold || h.Challenger.HasPass(r, clientIP) {
+		return false
+	}
+	serve := h.Challenge && isNavigation(r)
+	action, status := store.ActionWouldChallenge, 0
+	if serve {
+		action, status = store.ActionChallenged, http.StatusForbidden
+	}
+	if h.Tracker.ShouldReport(clientIP, action) {
+		h.record(r, clientIP, store.Event{
+			RequestID: crand.Text()[:20], Status: status, Action: action, Score: res.Score, Signals: res.Fired,
+		})
+	}
+	if serve {
+		h.Challenger.Serve(w, r, clientIP)
+	}
+	return serve
+}
+
+// isNavigation reports whether r is a browser page load, the only kind of
+// request that can display and solve a challenge.
+func isNavigation(r *http.Request) bool {
+	if r.Method != http.MethodGet || score.IsAssetPath(r.URL.Path) {
+		return false
+	}
+	switch r.Header.Get("Sec-Fetch-Dest") {
+	case "document":
+		return true
+	case "":
+		// Clients without Fetch Metadata: treat HTML or anything-goes Accept
+		// as a page load, so scrapers sending "*/*" are covered.
+		accept := strings.TrimSpace(r.Header.Get("Accept"))
+		return accept == "" || accept == "*/*" || strings.Contains(accept, "text/html")
+	default:
+		return false
+	}
+}
+
+// observe feeds the finished request into the session's behavior history.
+func (h *Handler) observe(r *http.Request, clientIP string, status int, contentType string, wafWouldBlock bool) {
+	e := score.Entry{
+		At:            h.Now(),
+		PathHash:      score.Hash(r.URL.Path),
+		Kind:          score.Classify(r.URL.Path, contentType, status),
+		Status:        status,
+		RobotsFetch:   r.URL.Path == "/robots.txt",
+		WAFWouldBlock: wafWouldBlock,
+	}
+	if r.URL.RawQuery != "" {
+		e.QueryHash, e.HasQuery = score.Hash(r.URL.RawQuery), true
+	}
+	if h.Deception != nil {
+		e.RobotsDisallowed = h.Deception.UpstreamDisallows(r.URL.RequestURI())
+	}
+	h.Tracker.Observe(clientIP, e)
 }
 
 // trap handles a decoy request. Decoys are never real upstream paths, so
@@ -193,7 +284,7 @@ func (h *Handler) record(r *http.Request, clientIP string, e store.Event) {
 	if len(path) > maxPathLen {
 		path = path[:maxPathLen]
 	}
-	e.Time = time.Now()
+	e.Time = h.Now()
 	e.ClientIP = clientIP
 	e.Method = r.Method
 	e.Host = r.Host

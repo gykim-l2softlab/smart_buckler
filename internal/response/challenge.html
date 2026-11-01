@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>잠시만 기다려 주세요</title>
+<style nonce="{{.CSPNonce}}">
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f6f7f9;color:#1f2328;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+main{box-sizing:border-box;max-width:30rem;margin:16px;padding:2rem;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+h1{margin:0 0 .75rem;font-size:1.25rem}
+p{margin:.5rem 0;line-height:1.6}
+#status{color:#57606a;font-size:.9rem}
+@media (prefers-color-scheme:dark){body{background:#0d1117;color:#e6edf3}main{background:#161b22;box-shadow:none}#status{color:#8b949e}}
+</style>
+</head>
+<body>
+<main id="l2b" data-c="{{.Challenge}}" data-d="{{.Difficulty}}" data-r="{{.Redirect}}" data-p="{{.PoWPath}}">
+<h1>잠시만 기다려 주세요</h1>
+<p>자동화된 접근으로부터 사이트를 보호하기 위해 브라우저를 확인하고 있습니다. 보통 몇 초 안에 끝나며, 확인이 끝나면 원래 페이지로 돌아갑니다.</p>
+<p id="status" role="status" aria-live="polite">확인 중입니다.</p>
+<noscript><p>이 확인에는 JavaScript가 필요합니다. 브라우저에서 JavaScript를 켠 뒤 다시 시도해 주세요.</p></noscript>
+</main>
+<script nonce="{{.CSPNonce}}">
+(function () {
+  "use strict";
+  // Plain SHA-256: crypto.subtle is unavailable on plain HTTP sites.
+  var K = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ]);
+  var W = new Uint32Array(64);
+
+  // sha256 hashes an ASCII string and returns the digest as 8 unsigned words.
+  function sha256(s) {
+    var l = s.length, words = (((l + 8) >> 6) + 1) << 4, m = new Uint32Array(words), i, j;
+    for (i = 0; i < l; i++) m[i >> 2] |= s.charCodeAt(i) << (24 - (i & 3) * 8);
+    m[l >> 2] |= 0x80 << (24 - (l & 3) * 8);
+    m[words - 1] = l * 8;
+    var h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a,
+        h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+    for (j = 0; j < words; j += 16) {
+      var a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+      for (i = 0; i < 64; i++) {
+        if (i < 16) {
+          W[i] = m[j + i];
+        } else {
+          var x = W[i - 15], y = W[i - 2];
+          W[i] = (((x >>> 7 | x << 25) ^ (x >>> 18 | x << 14) ^ (x >>> 3)) + W[i - 7] +
+                  ((y >>> 17 | y << 15) ^ (y >>> 19 | y << 13) ^ (y >>> 10)) + W[i - 16]) | 0;
+        }
+        var t1 = (h + ((e >>> 6 | e << 26) ^ (e >>> 11 | e << 21) ^ (e >>> 25 | e << 7)) +
+                  ((e & f) ^ (~e & g)) + K[i] + W[i]) | 0;
+        var t2 = (((a >>> 2 | a << 30) ^ (a >>> 13 | a << 19) ^ (a >>> 22 | a << 10)) +
+                  ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
+      h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
+    }
+    return [h0 >>> 0, h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0, h5 >>> 0, h6 >>> 0, h7 >>> 0];
+  }
+
+  function zeroBits(hash, bits) {
+    var k = 0;
+    for (; bits >= 32; bits -= 32) if (hash[k++] !== 0) return false;
+    return bits === 0 || (hash[k] >>> (32 - bits)) === 0;
+  }
+
+  // Exposed for tests run outside a browser.
+  if (typeof module !== "undefined") module.exports = { sha256: sha256, zeroBits: zeroBits };
+
+  var el = document.getElementById("l2b");
+  if (!el) return;
+  var challenge = el.getAttribute("data-c"), bits = +el.getAttribute("data-d"),
+      status = document.getElementById("status"), prefix = challenge + ":", nonce = 0;
+
+  function step() {
+    for (var end = nonce + 20000; nonce < end; nonce++) {
+      if (zeroBits(sha256(prefix + nonce), bits)) {
+        status.textContent = "확인되었습니다. 원래 페이지로 이동합니다.";
+        location.replace(el.getAttribute("data-p") + "?c=" + encodeURIComponent(challenge) +
+          "&n=" + nonce + "&r=" + encodeURIComponent(el.getAttribute("data-r")));
+        return;
+      }
+    }
+    setTimeout(step, 0);
+  }
+
+  step();
+})();
+</script>
+</body>
+</html>
