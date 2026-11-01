@@ -1,0 +1,15 @@
+# Local development configuration. Run with: make run
+listen: ":8080"
+upstream: "http://127.0.0.1:3000"
+
+waf:
+  # detect: log only (default). block: deny requests over the CRS anomaly threshold.
+  mode: detect
+  # Request body bytes inspected by the WAF. The rest is forwarded without inspection.
+  request_body_limit: 1048576
+
+store:
+  path: "l2-buckler.db"
+
+log:
+  level: debug
