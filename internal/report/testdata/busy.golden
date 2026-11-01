@@ -1,0 +1,33 @@
+2026년 10월 31일 하루 동안 l2-buckler가 확인한 내용입니다.
+
+한눈에 보기
+- 미끼 경로에 접근해 차단한 클라이언트: 1곳
+- 자동화 도구로 보여 확인 화면을 보여 준 클라이언트: 6곳 (그중 4곳이 통과)
+- 탐지 모드라서 통과시켰지만 차단 모드였다면 막았을 요청: 2건
+- 차단 기준에 못 미친 WAF 경고: 1건
+
+살펴볼 점
+- 확인 화면을 받은 클라이언트 중 66%가 통과했습니다. 봇은 대개 통과하지 못하므로 사람이 걸렸을 수 있습니다. 같은 일이 반복되면 score.threshold를 올리거나 score.weights를 조정해 보세요.
+
+가장 많이 걸린 클라이언트
+- 198.51.100.7 (3건)
+- 203.0.113.10 (1건)
+- 203.0.113.11 (1건)
+- 203.0.113.12 (1건)
+- 203.0.113.13 (1건)
+
+가장 많이 노린 경로
+- /board (6건)
+- /aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa… (1건)
+- /db-export-x1y2z3/ (1건)
+- /item[31m (1건)
+
+자주 걸린 WAF 규칙
+- 942100 SQL Injection Attack Detected via libinjection (2건)
+- 920350 Host header is a numeric IP address (1건)
+
+자주 나타난 자동화 징후
+- 없는 페이지(404)를 많이 요청 (6건)
+- 정적 파일 없이 페이지만 요청 (6건)
+
+자세한 기록은 l2-buckler 데이터베이스의 events 테이블에서 볼 수 있습니다.

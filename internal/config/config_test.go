@@ -87,6 +87,27 @@ log:
 		{name: "bad threshold", yaml: "upstream: http://a\nscore:\n  threshold: 0\n", wantErr: "threshold"},
 		{name: "difficulty too high", yaml: "upstream: http://a\nchallenge:\n  difficulty: 30\n", wantErr: "difficulty"},
 		{name: "bad pass duration", yaml: "upstream: http://a\nchallenge:\n  pass_duration: 0s\n", wantErr: "pass_duration"},
+		{
+			name: "report and notify",
+			yaml: "upstream: http://a\nreport:\n  time: \"07:30\"\n  timezone: Asia/Seoul\n  llm: {enabled: true, model: qwen3:4b}\n" +
+				"notify:\n  email: {enabled: true, host: smtp.example.com, from: \"l2 <bot@example.com>\", to: [ops@example.com]}\n" +
+				"  slack: {enabled: true, webhook_url: \"https://hooks.slack.com/services/T/B/x\"}\n" +
+				"  telegram: {enabled: true, bot_token: \"1:a\", chat_id: \"-100\"}\n",
+			check: func(t *testing.T, c Config) {
+				if c.ReportAt() != 7*time.Hour+30*time.Minute || c.ReportLocation().String() != "Asia/Seoul" ||
+					c.Notify.Email.Port != 587 || c.Report.LLM.URL != "http://127.0.0.1:11434" {
+					t.Errorf("report = %v %v %+v", c.ReportAt(), c.ReportLocation(), c.Notify.Email)
+				}
+			},
+		},
+		{name: "bad report time", yaml: "upstream: http://a\nreport:\n  time: \"9am\"\n", wantErr: "report.time"},
+		{name: "bad timezone", yaml: "upstream: http://a\nreport:\n  timezone: Mars/Base\n", wantErr: "report.timezone"},
+		{name: "llm without model", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true}\n", wantErr: "report.llm.model"},
+		{name: "email without to", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: a@b.c}\n", wantErr: "notify.email.to"},
+		{name: "email bad address", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: nope, to: [a@b.c]}\n", wantErr: "bad address"},
+		{name: "slack over http", yaml: "upstream: http://a\nnotify:\n  slack: {enabled: true, webhook_url: \"http://x/y\"}\n", wantErr: "https"},
+		{name: "telegram without chat", yaml: "upstream: http://a\nnotify:\n  telegram: {enabled: true, bot_token: x}\n", wantErr: "chat_id"},
+		{name: "disabled channels need nothing", yaml: "upstream: http://a\nnotify:\n  slack: {enabled: false}\n"},
 		{name: "bad trusted proxy", yaml: "upstream: http://a\ntrusted_proxies: [proxy.local]\n", wantErr: "trusted_proxies"},
 		{name: "bad block duration", yaml: "upstream: http://a\ndeception:\n  block_duration: 0s\n", wantErr: "block_duration"},
 		{name: "unparsable duration", yaml: "upstream: http://a\ndeception:\n  block_duration: forever\n", wantErr: "parse config"},
@@ -106,7 +127,9 @@ log:
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			tt.check(t, c)
+			if tt.check != nil {
+				tt.check(t, c)
+			}
 		})
 	}
 }

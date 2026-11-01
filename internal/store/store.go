@@ -92,6 +92,12 @@ var migrations = []string{
 		name  TEXT PRIMARY KEY,
 		value BLOB NOT NULL
 	);`,
+	`CREATE TABLE reports (
+		day        TEXT    PRIMARY KEY, -- YYYY-MM-DD in the report time zone
+		created_at INTEGER NOT NULL,    -- unix milliseconds
+		body       TEXT    NOT NULL,
+		sent       INTEGER NOT NULL     -- number of channels that accepted it
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.
