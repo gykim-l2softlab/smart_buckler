@@ -1,0 +1,9 @@
+{{define "title"}}알림 테스트{{end}}
+{{define "content"}}
+<section class="card stack">
+  <h1>알림 테스트 결과</h1>
+  {{if .Data}}<ul>{{range .Data}}<li>{{.Channel}}: {{if .OK}}보냄{{else}}실패 (자세한 내용은 서버 로그를 보세요){{end}}</li>{{end}}</ul>
+  {{else}}<p>켜 둔 알림 채널이 없습니다. 설정 파일의 notify 항목에서 채널을 켜세요.</p>{{end}}
+  <div class="row"><a class="btn" href="/settings">설정으로 돌아가기</a></div>
+</section>
+{{end}}

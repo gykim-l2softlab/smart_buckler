@@ -81,12 +81,22 @@ func (s *Store) SaveBlock(ctx context.Context, b Block) error {
 	return nil
 }
 
+// DeleteBlock removes a block. It reports whether one existed.
+func (s *Store) DeleteBlock(ctx context.Context, sessionID string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM blocks WHERE session_id = ?", sessionID)
+	if err != nil {
+		return false, fmt.Errorf("delete block: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // ActiveBlocks deletes blocks that expired before now and returns the rest.
 func (s *Store) ActiveBlocks(ctx context.Context, now time.Time) ([]Block, error) {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM blocks WHERE until <= ?", now.UnixMilli()); err != nil {
 		return nil, fmt.Errorf("delete expired blocks: %w", err)
 	}
-	rows, err := s.db.QueryContext(ctx, "SELECT session_id, until, reason, created_at FROM blocks")
+	rows, err := s.db.QueryContext(ctx, "SELECT session_id, until, reason, created_at FROM blocks ORDER BY created_at DESC")
 	if err != nil {
 		return nil, fmt.Errorf("query blocks: %w", err)
 	}

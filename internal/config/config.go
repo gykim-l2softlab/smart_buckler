@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/mail"
 	"net/netip"
 	"net/url"
@@ -45,6 +46,7 @@ type Config struct {
 	Challenge      Challenge `yaml:"challenge"`
 	Report         Report    `yaml:"report"`
 	Notify         Notify    `yaml:"notify"`
+	Admin          Admin     `yaml:"admin"`
 	Store          Store     `yaml:"store"`
 	Log            Log       `yaml:"log"`
 
@@ -122,6 +124,22 @@ type LLM struct {
 	Timeout         time.Duration `yaml:"timeout"`
 }
 
+// Admin configures the administration web UI. It listens separately from
+// the proxy and stays closed until a password is set with
+// "l2-buckler admin-password".
+type Admin struct {
+	Enabled bool `yaml:"enabled"`
+	// Listen is the admin address. Keep it on loopback and reach it through
+	// an SSH tunnel, or put an authenticating TLS proxy in front.
+	Listen string `yaml:"listen"`
+	// Hosts lists extra Host header names accepted when a reverse proxy
+	// forwards to the admin UI. Requests for other hosts are refused, which
+	// blocks DNS rebinding.
+	Hosts []string `yaml:"hosts"`
+	// SessionDuration is how long a login lasts.
+	SessionDuration time.Duration `yaml:"session_duration"`
+}
+
 // Notify configures report delivery channels. All are off by default.
 type Notify struct {
 	Email    Email    `yaml:"email"`
@@ -167,6 +185,7 @@ type Log struct {
 func Default() Config {
 	return Config{
 		Listen: ":8080",
+		Admin:  Admin{Enabled: true, Listen: "127.0.0.1:8081", SessionDuration: 12 * time.Hour},
 		WAF: WAF{
 			Mode:             WAFModeDetect,
 			RequestBodyLimit: 1 << 20,
@@ -285,6 +304,17 @@ func (c *Config) validate() error {
 		return errors.New("challenge.pass_duration must be positive")
 	}
 
+	if c.Admin.Enabled {
+		if _, _, err := net.SplitHostPort(c.Admin.Listen); err != nil {
+			return fmt.Errorf("admin.listen: %w", err)
+		}
+		if c.Admin.Listen == c.Listen {
+			return errors.New("admin.listen must differ from listen")
+		}
+		if c.Admin.SessionDuration < time.Minute {
+			return errors.New("admin.session_duration must be at least 1m")
+		}
+	}
 	if err := c.validateReport(); err != nil {
 		return err
 	}
@@ -430,3 +460,25 @@ func (c Config) ReportLocation() *time.Location { return c.reportLoc }
 // ReportAt returns the daily send time as an offset from midnight. Valid only
 // after Parse succeeds.
 func (c Config) ReportAt() time.Duration { return c.reportAt }
+
+// secretMask replaces a configured secret in Redacted output.
+const secretMask = "(set)"
+
+// Redacted returns the configuration as YAML with secrets replaced, for
+// display in the admin UI.
+func (c Config) Redacted() (string, error) {
+	mask := func(s *string) {
+		if *s != "" {
+			*s = secretMask
+		}
+	}
+	mask(&c.Notify.Email.Password)
+	mask(&c.Notify.Slack.WebhookURL)
+	mask(&c.Notify.Telegram.BotToken)
+	mask(&c.Report.LLM.APIKey)
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("encode config: %w", err)
+	}
+	return string(out), nil
+}

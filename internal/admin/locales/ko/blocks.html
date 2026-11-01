@@ -1,0 +1,17 @@
+{{define "title"}}차단{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head"><h1>지금 차단 중인 주소</h1><p>{{len .Blocks}}곳</p></div>
+<section class="card">
+{{if .Blocks}}<div class="scroll"><table class="wide">
+  <thead><tr><th>주소</th><th>사유</th><th class="hide-sm">차단한 시각</th><th>남은 시간</th><th></th></tr></thead>
+  <tbody>{{range .Blocks}}<tr>
+    <td class="mono nowrap"><a href="/clients/{{pathEscape .SessionID}}">{{.SessionID}}</a></td>
+    <td>{{action .Reason}}</td>
+    <td class="nowrap hide-sm">{{datetime .CreatedAt}}</td>
+    <td class="nowrap">{{remaining .Until $.Data.Now}}</td>
+    <td><a href="/blocks/{{pathEscape .SessionID}}/unblock">풀기</a></td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="muted">지금 차단 중인 주소가 없습니다.</p>{{end}}
+</section>
+{{end}}{{end}}

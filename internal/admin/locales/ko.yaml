@@ -1,0 +1,31 @@
+# Labels for the admin UI. Keys are identifiers from the code.
+# series names the overview chart series in order: decoy hits, challenges, WAF blocks.
+series:
+  - 미끼 접근 차단
+  - 확인 화면
+  - WAF 차단
+actions:
+  trap_hit:
+    label: 미끼 접근 차단
+    desc: 사람에게는 보이지 않는 미끼 경로에 접근해서 이 주소를 일정 시간 차단했습니다. 사람이 실수로 들어오기 어려운 곳이라 자동화 도구일 가능성이 매우 높습니다.
+  blocked:
+    label: WAF 차단
+    desc: 요청에 공격 패턴이 있어 WAF가 막았습니다. 아래 규칙이 걸렸습니다.
+  would_block:
+    label: WAF 차단 예정
+    desc: 요청에 공격 패턴이 있었습니다. 지금은 탐지 모드라 통과시켰지만, 차단 모드였다면 막았을 요청입니다.
+  detected:
+    label: WAF 경고
+    desc: WAF 규칙 일부가 걸렸지만 차단 기준에는 못 미쳤습니다. 대부분 정상 요청에서도 나오는 가벼운 경고입니다.
+  challenged:
+    label: 확인 화면
+    desc: 자동화 징후가 쌓여서 페이지 대신 확인 화면을 보여 줬습니다. 사람은 브라우저가 잠깐 계산한 뒤 그대로 들어갑니다.
+  would_challenge:
+    label: 확인 화면 대상
+    desc: 자동화 징후가 쌓였지만 페이지 이동이 아니거나 탐지 모드라서 통과시켰습니다.
+  challenge_passed:
+    label: 확인 통과
+    desc: 확인 화면의 계산을 마쳐서 통과했습니다. 일정 시간 동안 다시 묻지 않습니다.
+  unblocked:
+    label: 차단 해제
+    desc: 관리자가 관리 화면에서 차단을 풀었습니다.

@@ -1,0 +1,24 @@
+{{define "title"}}설정{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head"><h1>설정</h1><p>읽기 전용입니다. 바꾸려면 설정 파일을 고치고 다시 시작하세요.</p></div>
+<section class="card stack">
+  <h2>실행 정보</h2>
+  <dl>
+    <dt>버전</dt><dd>{{.Info.Version}}</dd>
+    <dt>시작한 시각</dt><dd>{{datetime .Info.Started}}</dd>
+    <dt>WAF</dt><dd>{{if eq .Info.WAFMode "block"}}차단 모드{{else}}탐지 모드 (기록만 함){{end}}</dd>
+    <dt>행위 점수</dt><dd>{{if eq .Info.ScoreMode "challenge"}}확인 화면 사용{{else}}탐지 모드 (기록만 함){{end}}</dd>
+    <dt>버린 이벤트</dt><dd>{{.Dropped}}건{{if .Dropped}} <span class="pill">저장이 밀려서 기록하지 못한 이벤트입니다</span>{{end}}</dd>
+  </dl>
+</section>
+<section class="card stack">
+  <h2>알림 테스트</h2>
+  <p>켜 둔 알림 채널마다 테스트 메시지를 보냅니다.</p>
+  <form method="post" action="/settings/notify-test"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn" type="submit">테스트 메시지 보내기</button></form>
+</section>
+<section class="card stack">
+  <h2>현재 설정</h2>
+  <p class="muted">비밀번호, 토큰, 웹훅 주소, API 키는 (set)으로 가렸습니다.</p>
+  <pre>{{.Info.Config}}</pre>
+</section>
+{{end}}{{end}}

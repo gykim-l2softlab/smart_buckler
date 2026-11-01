@@ -1,0 +1,60 @@
+{{define "title"}}개요{{end}}
+{{define "legend"}}<ul class="legend">{{range $i, $_ := .}}<li><span class="sw s{{inc $i}}"></span>{{.}}</li>{{end}}</ul>{{end}}
+{{define "table"}}<details class="tableview"><summary>표로 보기</summary><div class="scroll"><table>
+<thead><tr><th scope="col">{{.Head}}</th>{{range .Series}}<th scope="col" class="num">{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr><th scope="row">{{.Label}}</th>{{range .Values}}<td class="num">{{.}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div></details>{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head">
+  <h1>오늘, {{.Today.Format "2006년 1월 2일"}}</h1>
+  <p>0시부터 {{.Now.Format "15시 04분"}}까지, {{.Zone}} 기준</p>
+</div>
+
+<div class="tiles">
+  <a class="card tile{{if .Blocked}} alert{{end}}" href="/blocks"><span class="lab">지금 차단 중</span><span class="val">{{.Blocked}}<small>곳</small></span><span class="sub">미끼에 접근해서 차단된 주소</span></a>
+  <a class="card tile" href="/events?action=trap_hit&amp;date={{.Today.Format "2006-01-02"}}"><span class="lab">미끼 접근으로 차단</span><span class="val">{{index .Sum.Clients "trap_hit"}}<small>곳</small></span><span class="sub">숨김 링크와 robots.txt 미끼</span></a>
+  <a class="card tile" href="/events?action=challenged&amp;date={{.Today.Format "2006-01-02"}}"><span class="lab">확인 화면을 받은 클라이언트</span><span class="val">{{index .Sum.Clients "challenged"}}<small>곳</small></span><span class="sub">그중 {{index .Sum.Clients "challenge_passed"}}곳 통과{{with index .Sum.Clients "would_challenge"}}, 대상이었지만 통과시킨 곳 {{.}}곳{{end}}</span></a>
+  {{if eq .WAFMode "block"}}
+  <a class="card tile" href="/events?action=blocked&amp;date={{.Today.Format "2006-01-02"}}"><span class="lab">WAF가 막은 요청</span><span class="val">{{index .Sum.Events "blocked"}}<small>건</small></span><span class="sub"><span class="pill crit">차단 모드</span> 공격 패턴으로 막은 요청</span></a>
+  {{else}}
+  <a class="card tile" href="/events?action=would_block&amp;date={{.Today.Format "2006-01-02"}}"><span class="lab">WAF 차단 예정 요청</span><span class="val">{{index .Sum.Events "would_block"}}<small>건</small></span><span class="sub"><span class="pill">탐지 모드</span> 차단 모드였다면 막았을 요청</span></a>
+  {{end}}
+  <a class="card tile" href="/events?action=detected&amp;date={{.Today.Format "2006-01-02"}}"><span class="lab">차단 기준 미만 WAF 경고</span><span class="val">{{index .Sum.Events "detected"}}<small>건</small></span><span class="sub">대부분 정상 요청에서도 나오는 경고</span></a>
+</div>
+
+<section class="card">
+  <div class="charthead"><h2>시간대별 주목할 이벤트</h2>{{template "legend" $.Series}}</div>
+  <div class="scroll">{{.Hourly.SVG}}</div>
+  {{template "table" (tableArgs "시간" $.Series .Hourly.Rows)}}
+</section>
+
+<div class="cols">
+  <section class="card">
+    <div class="charthead"><h2>최근 7일</h2>{{template "legend" $.Series}}</div>
+    <div class="scroll">{{.Daily.SVG}}</div>
+    {{template "table" (tableArgs "날짜" $.Series .Daily.Rows)}}
+  </section>
+  <section class="card stack">
+    <h2>일일 요약</h2>
+    {{if .Reports}}<ul class="list">
+      {{range .Reports}}<li><a href="/reports/{{.Day}}"><span>{{.Day}}</span><span class="meta">{{if .Sent}}{{.Sent}}개 채널로 보냄{{else}}보내지 못함{{end}}</span></a></li>{{end}}
+    </ul>{{else}}<p class="muted">아직 보낸 요약이 없습니다. 알림 채널을 켜면 매일 정해진 시각에 보냅니다.</p>{{end}}
+    <div class="row"><a class="btn" href="/reports/preview">오늘 요약 미리보기</a></div>
+  </section>
+</div>
+
+<div class="tops">
+  <section class="card top"><h3>많이 걸린 클라이언트</h3>{{if .Sum.TopClients}}<ol>
+    {{range .Sum.TopClients}}<li><a href="/clients/{{pathEscape .Key}}"><span class="k mono">{{.Key}}</span><span class="n">{{.N}}</span><span class="bar {{wclass .N (index $.Data.TopMax "clients")}}"></span></a></li>{{end}}
+  </ol>{{else}}<p class="muted">없음</p>{{end}}</section>
+  <section class="card top"><h3>많이 노린 경로</h3>{{if .Sum.TopPaths}}<ol>
+    {{range .Sum.TopPaths}}<li><a href="/events?path={{.Key}}"><span class="k mono">{{clip .Key}}</span><span class="n">{{.N}}</span><span class="bar {{wclass .N (index $.Data.TopMax "paths")}}"></span></a></li>{{end}}
+  </ol>{{else}}<p class="muted">없음</p>{{end}}</section>
+  <section class="card top"><h3>자주 걸린 WAF 규칙</h3>{{if .Sum.TopRules}}<ol>
+    {{range .Sum.TopRules}}<li><span><span class="k">{{.ID}} {{clip .Message}}</span><span class="n">{{.N}}</span><span class="bar {{wclass .N (index $.Data.TopMax "rules")}}"></span></span></li>{{end}}
+  </ol>{{else}}<p class="muted">없음</p>{{end}}</section>
+  <section class="card top"><h3>자주 나타난 자동화 징후</h3>{{if .Sum.TopSignals}}<ol>
+    {{range .Sum.TopSignals}}<li><span><span class="k">{{signal .Key}}</span><span class="n">{{.N}}</span><span class="bar {{wclass .N (index $.Data.TopMax "signals")}}"></span></span></li>{{end}}
+  </ol>{{else}}<p class="muted">없음</p>{{end}}</section>
+</div>
+{{end}}{{end}}

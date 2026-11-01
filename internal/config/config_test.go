@@ -122,6 +122,15 @@ log:
 		{name: "llm anthropic without key", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: anthropic, model: m}\n", wantErr: "api_key"},
 		{name: "llm anthropic effort none", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: anthropic, model: m, api_key: k, reasoning_effort: none}\n", wantErr: "reasoning_effort"},
 		{name: "llm bad provider", yaml: "upstream: http://a\nreport:\n  llm: {enabled: true, provider: gemini, model: m}\n", wantErr: "provider"},
+		{name: "admin defaults", yaml: "upstream: http://a\n",
+			check: func(t *testing.T, c Config) {
+				if !c.Admin.Enabled || c.Admin.Listen != "127.0.0.1:8081" || c.Admin.SessionDuration != 12*time.Hour {
+					t.Errorf("admin = %+v", c.Admin)
+				}
+			}},
+		{name: "admin bad listen", yaml: "upstream: http://a\nadmin:\n  listen: \"8081\"\n", wantErr: "admin.listen"},
+		{name: "admin same listen", yaml: "upstream: http://a\nlisten: \"127.0.0.1:8081\"\n", wantErr: "admin.listen must differ"},
+		{name: "admin disabled ignores listen", yaml: "upstream: http://a\nadmin:\n  enabled: false\n  listen: \"x\"\n"},
 		{name: "email without to", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: a@b.c}\n", wantErr: "notify.email.to"},
 		{name: "email bad address", yaml: "upstream: http://a\nnotify:\n  email: {enabled: true, host: h, from: nope, to: [a@b.c]}\n", wantErr: "bad address"},
 		{name: "slack over http", yaml: "upstream: http://a\nnotify:\n  slack: {enabled: true, webhook_url: \"http://x/y\"}\n", wantErr: "https"},
@@ -169,5 +178,30 @@ func TestLoad(t *testing.T) {
 func TestDevConfigIsValid(t *testing.T) {
 	if _, err := Load("../../configs/dev.yaml"); err != nil {
 		t.Fatalf("configs/dev.yaml: %v", err)
+	}
+}
+
+func TestRedactedHidesSecrets(t *testing.T) {
+	c, err := Parse([]byte("upstream: http://a\nreport:\n  llm: {enabled: true, model: m, url: \"https://x/v1\", api_key: sk-secret-1}\n" +
+		"notify:\n  email: {enabled: true, host: h, from: a@b.c, to: [a@b.c], password: pw-secret-2}\n" +
+		"  slack: {enabled: true, webhook_url: \"https://hooks.slack.com/services/T/B/secret-3\"}\n" +
+		"  telegram: {enabled: true, bot_token: \"1:secret-4\", chat_id: \"5\"}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := c.Redacted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"secret-1", "secret-2", "secret-3", "secret-4"} {
+		if strings.Contains(out, secret) {
+			t.Errorf("redacted config contains %s:\n%s", secret, out)
+		}
+	}
+	if !strings.Contains(out, "upstream: http://a") || !strings.Contains(out, secretMask) {
+		t.Errorf("redacted config:\n%s", out)
+	}
+	if c.Report.LLM.APIKey != "sk-secret-1" {
+		t.Error("Redacted modified the config")
 	}
 }
