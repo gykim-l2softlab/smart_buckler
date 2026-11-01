@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
@@ -56,11 +57,12 @@ type Decoy struct {
 	CreatedAt time.Time
 }
 
-// Deception holds the active decoys. It is immutable after Load and safe for
-// concurrent use.
+// Deception holds the active decoys. It is safe for concurrent use.
 type Deception struct {
 	decoys []Decoy
 	now    func() time.Time
+	// upstreamRobots holds the rules of the robots.txt last fetched from upstream.
+	upstreamRobots atomic.Pointer[robotsRules]
 }
 
 // Load returns the stored decoys, replacing any that conflict with

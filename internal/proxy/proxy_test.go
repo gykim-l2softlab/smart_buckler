@@ -17,6 +17,7 @@ import (
 	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/redact"
 	"github.com/gykim-l2softlab/smart_buckler/internal/response"
+	"github.com/gykim-l2softlab/smart_buckler/internal/score"
 	"github.com/gykim-l2softlab/smart_buckler/internal/session"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
@@ -92,22 +93,45 @@ func newHandler(t *testing.T, up *upstream, insp Inspector, rec Recorder) *Handl
 // (deception disabled); trusted lists trusted proxies.
 func newHandlerWith(t testing.TB, up *upstream, insp Inspector, rec Recorder, dec *deception.Deception, trusted []string) *Handler {
 	t.Helper()
-	u, err := url.Parse(up.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	o := testOptions(t, up, insp, rec)
+	o.Deception = dec
 	sessions, err := session.NewResolver(trusted)
 	if err != nil {
 		t.Fatal(err)
 	}
+	o.Sessions = sessions
+	return New(o)
+}
+
+// testOptions returns working defaults: no deception, default score weights,
+// challenge mode with a low difficulty.
+func testOptions(t testing.TB, up *upstream, insp Inspector, rec Recorder) Options {
+	t.Helper()
+	u, err := url.Parse(up.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, _ := session.NewResolver(nil)
 	bl, err := response.NewBlocklist(context.Background(), tempStore(t), discardLogger(), time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(Options{
-		Upstream: u, Sessions: sessions, Blocklist: bl, Deception: dec, BlockDuration: time.Hour,
-		Inspector: insp, Recorder: rec, Log: discardLogger(),
-	})
+	tracker, err := score.NewTracker(score.Config{
+		Weights: score.DefaultWeights(), Window: score.DefaultWindow,
+		MaxEntries: score.DefaultMaxEntries, MaxSessions: score.DefaultMaxSessions,
+	}, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, err := response.NewChallenger([]byte(strings.Repeat("s", 32)), 8, time.Hour, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Options{
+		Upstream: u, Sessions: sessions, Blocklist: bl, BlockDuration: time.Hour,
+		Inspector: insp, Tracker: tracker, Threshold: score.DefaultThreshold, Challenger: ch, Challenge: true,
+		Recorder: rec, Log: discardLogger(),
+	}
 }
 
 func tempStore(t testing.TB) *store.Store {

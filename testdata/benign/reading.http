@@ -1,0 +1,269 @@
+GET / HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+
+GET /static/css/site.css HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/css,*/*;q=0.1
+Sec-Fetch-Dest: style
+Sec-Fetch-Mode: no-cors
+Referer: http://app.example.com/
+
+GET /static/js/app.js HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: */*
+Sec-Fetch-Dest: script
+Sec-Fetch-Mode: no-cors
+Referer: http://app.example.com/
+
+GET /static/img/logo.png HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: image/avif,image/webp,*/*
+Sec-Fetch-Dest: image
+Sec-Fetch-Mode: no-cors
+Referer: http://app.example.com/
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 800ms
+
+GET /article/100 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 6s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/101 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 14s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/102 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 9s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/103 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 31s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/104 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 4s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/105 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 12s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/106 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 19s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/107 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 7s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/108 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 25s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/109 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 5s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/110 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 11s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+
+GET /article/111 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-origin
+Referer: http://app.example.com/
+X-Fixture-Delay: 16s
+
+GET /api/notifications HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+X-Fixture-Delay: 1500ms
+

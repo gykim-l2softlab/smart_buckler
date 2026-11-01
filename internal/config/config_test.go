@@ -32,6 +32,10 @@ func TestParse(t *testing.T) {
 				if !c.Deception.Enabled || c.Deception.BlockDuration != time.Hour || len(c.TrustedProxies) != 0 {
 					t.Errorf("unexpected deception defaults: %+v", c.Deception)
 				}
+				if c.Score.Mode != ScoreModeChallenge || c.Score.Threshold != 10 || c.Score.Weights["waf_anomaly"] != 10 ||
+					c.Challenge.Difficulty != 16 || c.Challenge.PassDuration != 24*time.Hour {
+					t.Errorf("unexpected score defaults: %+v %+v", c.Score, c.Challenge)
+				}
 			},
 		},
 		{
@@ -67,6 +71,22 @@ log:
 		{name: "bad mode", yaml: "upstream: http://a\nwaf:\n  mode: off\n", wantErr: "waf.mode"},
 		{name: "bad body limit", yaml: "upstream: http://a\nwaf:\n  request_body_limit: 0\n", wantErr: "request_body_limit"},
 		{name: "bad log level", yaml: "upstream: http://a\nlog:\n  level: loud\n", wantErr: "log.level"},
+		{
+			name: "weights override merges with defaults",
+			yaml: "upstream: http://a\nscore:\n  mode: detect\n  weights:\n    html_only: 0\n    high_404: 8\n",
+			check: func(t *testing.T, c Config) {
+				w := c.Score.Weights
+				if c.Score.Mode != ScoreModeDetect || w["html_only"] != 0 || w["high_404"] != 8 || w["waf_anomaly"] != 10 {
+					t.Errorf("weights = %v", w)
+				}
+			},
+		},
+		{name: "unknown signal", yaml: "upstream: http://a\nscore:\n  weights:\n    ua_mismatch: 3\n", wantErr: "unknown signal"},
+		{name: "negative weight", yaml: "upstream: http://a\nscore:\n  weights:\n    high_404: -1\n", wantErr: "negative"},
+		{name: "bad score mode", yaml: "upstream: http://a\nscore:\n  mode: block\n", wantErr: "score.mode"},
+		{name: "bad threshold", yaml: "upstream: http://a\nscore:\n  threshold: 0\n", wantErr: "threshold"},
+		{name: "difficulty too high", yaml: "upstream: http://a\nchallenge:\n  difficulty: 30\n", wantErr: "difficulty"},
+		{name: "bad pass duration", yaml: "upstream: http://a\nchallenge:\n  pass_duration: 0s\n", wantErr: "pass_duration"},
 		{name: "bad trusted proxy", yaml: "upstream: http://a\ntrusted_proxies: [proxy.local]\n", wantErr: "trusted_proxies"},
 		{name: "bad block duration", yaml: "upstream: http://a\ndeception:\n  block_duration: 0s\n", wantErr: "block_duration"},
 		{name: "unparsable duration", yaml: "upstream: http://a\ndeception:\n  block_duration: forever\n", wantErr: "parse config"},

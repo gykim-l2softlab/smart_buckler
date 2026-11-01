@@ -22,6 +22,14 @@ const (
 	ActionDetected = "detected"
 	// ActionTrapHit: a decoy path was requested and the session was blocked.
 	ActionTrapHit = "trap_hit"
+	// ActionChallenged: the behavior score reached the threshold and a
+	// proof-of-work challenge was served.
+	ActionChallenged = "challenged"
+	// ActionWouldChallenge: the score reached the threshold but the request
+	// was let through (detect mode, or not a page navigation).
+	ActionWouldChallenge = "would_challenge"
+	// ActionChallengePassed: a challenge was solved.
+	ActionChallengePassed = "challenge_passed"
 )
 
 // Event is a security event. It never contains request bodies, query strings
@@ -36,6 +44,9 @@ type Event struct {
 	Status    int
 	Action    string
 	Rules     []Rule
+	// Score and Signals are set for behavior score events.
+	Score   int
+	Signals []string
 }
 
 // Rule is a matched WAF rule.
@@ -74,6 +85,12 @@ var migrations = []string{
 		until      INTEGER NOT NULL, -- unix milliseconds
 		reason     TEXT    NOT NULL,
 		created_at INTEGER NOT NULL
+	);`,
+	`ALTER TABLE events ADD COLUMN score INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE events ADD COLUMN signals TEXT NOT NULL DEFAULT '[]'; -- JSON array of signal names
+	CREATE TABLE secrets (
+		name  TEXT PRIMARY KEY,
+		value BLOB NOT NULL
 	);`,
 }
 
@@ -135,8 +152,8 @@ func (s *Store) InsertEvents(ctx context.Context, events []Event) error {
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO events
-		(ts, request_id, client_ip, method, host, path, status, action, rules)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		(ts, request_id, client_ip, method, host, path, status, action, rules, score, signals)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
 	}
@@ -151,8 +168,16 @@ func (s *Store) InsertEvents(ctx context.Context, events []Event) error {
 		if err != nil {
 			return fmt.Errorf("marshal rules: %w", err)
 		}
+		signals := e.Signals
+		if signals == nil {
+			signals = []string{}
+		}
+		signalsJSON, err := json.Marshal(signals)
+		if err != nil {
+			return fmt.Errorf("marshal signals: %w", err)
+		}
 		if _, err := stmt.ExecContext(ctx, e.Time.UnixMilli(), e.RequestID, e.ClientIP,
-			e.Method, e.Host, e.Path, e.Status, e.Action, string(rulesJSON)); err != nil {
+			e.Method, e.Host, e.Path, e.Status, e.Action, string(rulesJSON), e.Score, string(signalsJSON)); err != nil {
 			return fmt.Errorf("insert event: %w", err)
 		}
 	}
