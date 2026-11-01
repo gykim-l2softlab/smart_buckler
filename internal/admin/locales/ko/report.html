@@ -1,0 +1,9 @@
+{{define "title"}}요약 {{.Data.Day}}{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head"><h1>{{if .Preview}}오늘 요약 미리보기{{else}}{{.Day}} 요약{{end}}</h1>
+{{if .Preview}}<p>지금까지 쌓인 기록으로 만든 미리보기입니다. AI 요약은 넣지 않고, 아무 데도 보내지 않습니다.</p>{{end}}</div>
+<section class="card stack">
+  {{with .Subject}}<h2>{{.}}</h2>{{end}}
+  <pre>{{.Body}}</pre>
+</section>
+{{end}}{{end}}

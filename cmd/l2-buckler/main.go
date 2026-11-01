@@ -3,6 +3,7 @@
 //	l2-buckler [-config FILE]                          run the proxy
 //	l2-buckler report [-config FILE] [-date D] [-send] print (or send) a daily report
 //	l2-buckler notify-test [-config FILE]              send a test message to every channel
+//	l2-buckler admin-password [-config FILE]           set the admin UI password
 package main
 
 import (
@@ -15,10 +16,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 	_ "time/tzdata" // report.timezone works in minimal containers without zoneinfo
 
+	"github.com/gykim-l2softlab/smart_buckler/internal/admin"
 	"github.com/gykim-l2softlab/smart_buckler/internal/config"
 	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/notify"
@@ -35,7 +38,7 @@ const shutdownTimeout = 15 * time.Second
 
 func main() {
 	cmd, args := "serve", os.Args[1:]
-	if len(args) > 0 && (args[0] == "report" || args[0] == "notify-test") {
+	if len(args) > 0 && (args[0] == "report" || args[0] == "notify-test" || args[0] == "admin-password") {
 		cmd, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("l2-buckler "+cmd, flag.ExitOnError)
@@ -67,13 +70,15 @@ func main() {
 			}
 			return checkSent(g, g.Send(ctx, rep))
 		})
+	case "admin-password":
+		err = setAdminPassword(ctx, *configPath)
 	case "notify-test":
 		err = withReporter(ctx, *configPath, func(g *report.Generator) error {
-			return checkSent(g, g.Send(ctx, report.Report{
-				Day:     "test",
-				Subject: "[l2-buckler] 알림 테스트",
-				Body:    "l2-buckler 알림 설정이 정상입니다. 매일 보안 요약을 이 채널로 보냅니다.\n",
-			}))
+			msg, err := g.TestMessage()
+			if err != nil {
+				return err
+			}
+			return checkSent(g, g.Send(ctx, msg))
 		})
 	}
 	if err != nil {
@@ -223,6 +228,14 @@ func run(ctx context.Context, configPath string) error {
 	reportDone := make(chan struct{})
 	go func() { reporter.Run(ctx); close(reportDone) }()
 
+	started := time.Now()
+	var adminSrv *http.Server
+	if cfg.Admin.Enabled {
+		if adminSrv, err = startAdmin(ctx, cfg, st, blocklist, recorder, reporter, log, started); err != nil {
+			return err
+		}
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           handler,
@@ -256,6 +269,11 @@ func run(ctx context.Context, configPath string) error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("http shutdown", "err", err)
 	}
+	if adminSrv != nil {
+		if err := adminSrv.Shutdown(shutdownCtx); err != nil {
+			log.Error("admin shutdown", "err", err)
+		}
+	}
 	<-reportDone // Run returns once ctx is cancelled
 	if err := recorder.Close(shutdownCtx); err != nil {
 		log.Error("flush events", "err", err)
@@ -264,4 +282,69 @@ func run(ctx context.Context, configPath string) error {
 		log.Warn("events dropped during run", "dropped_total", d)
 	}
 	return nil
+}
+
+// startAdmin binds and serves the admin UI. A bind failure stops startup;
+// later serve errors are logged and never take the proxy down.
+func startAdmin(ctx context.Context, cfg config.Config, st *store.Store, bl *response.Blocklist,
+	rec *store.Recorder, rep *report.Generator, log *slog.Logger, started time.Time) (*http.Server, error) {
+	key, err := st.Secret(ctx, "admin_session", 32)
+	if err != nil {
+		return nil, err
+	}
+	redacted, err := cfg.Redacted()
+	if err != nil {
+		return nil, err
+	}
+	ui, err := admin.New(admin.Options{
+		Store: st, Blocklist: bl, Recorder: rec, Reporter: rep,
+		SessionKey: key, SessionDuration: cfg.Admin.SessionDuration,
+		Listen: cfg.Admin.Listen, Hosts: cfg.Admin.Hosts, Location: cfg.ReportLocation(),
+		Info: admin.Info{Version: version(), Started: started, WAFMode: cfg.WAF.Mode, ScoreMode: cfg.Score.Mode,
+			Config: redacted, Dropped: rec.Dropped},
+		Log: log,
+	})
+	if err != nil {
+		return nil, err
+	}
+	ln, err := net.Listen("tcp", cfg.Admin.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("admin listen: %w", err)
+	}
+	srv := &http.Server{
+		Handler:           ui,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+	go func() {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("admin serve", "err", err)
+		}
+	}()
+	attrs := []any{"listen", cfg.Admin.Listen}
+	if set, err := ui.PasswordSet(ctx); err == nil && !set {
+		attrs = append(attrs, "note", "no password yet; run: l2-buckler admin-password")
+	}
+	log.Info("admin UI started", attrs...)
+	if host, _, _ := net.SplitHostPort(cfg.Admin.Listen); !isLoopback(host) {
+		log.Warn("admin UI listens beyond loopback without TLS; use an SSH tunnel or a TLS proxy", "listen", cfg.Admin.Listen)
+	}
+	return srv, nil
+}
+
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// version reports the module version stamped by the Go toolchain.
+func version() string {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" {
+		return bi.Main.Version
+	}
+	return "unknown"
 }

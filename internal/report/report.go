@@ -132,8 +132,21 @@ type data struct {
 	AISummary             string
 }
 
+// Labels returns the human-readable labels for behavior signals.
+func (g *Generator) Labels() map[string]string { return g.labels }
+
 // Build renders the report for day (YYYY-MM-DD).
 func (g *Generator) Build(ctx context.Context, day string) (Report, error) {
+	return g.build(ctx, day, true)
+}
+
+// Preview renders the report for day without asking the LLM, so it is fast
+// and sends nothing anywhere.
+func (g *Generator) Preview(ctx context.Context, day string) (Report, error) {
+	return g.build(ctx, day, false)
+}
+
+func (g *Generator) build(ctx context.Context, day string, useLLM bool) (Report, error) {
 	from, err := time.ParseInLocation(dayLayout, day, g.Location)
 	if err != nil {
 		return Report{}, fmt.Errorf("parse day: %w", err)
@@ -170,7 +183,7 @@ func (g *Generator) Build(ctx context.Context, day string) (Report, error) {
 		}
 		d.TopSignals = append(d.TopSignals, labeled{Label: label, N: s.N})
 	}
-	if g.LLM != nil && !d.Quiet {
+	if useLLM && g.LLM != nil && !d.Quiet {
 		d.AISummary = g.summarize(ctx, d)
 	}
 
@@ -257,17 +270,46 @@ func (g *Generator) Deliver(ctx context.Context, day string) error {
 // Send sends rep through every channel and returns how many accepted it.
 func (g *Generator) Send(ctx context.Context, rep Report) int {
 	sent := 0
+	for _, r := range g.SendEach(ctx, rep) {
+		if r.Err == nil {
+			sent++
+		}
+	}
+	return sent
+}
+
+// SendResult is the outcome of sending through one channel.
+type SendResult struct {
+	Channel string
+	Err     error
+}
+
+// SendEach sends rep through every channel and reports each outcome.
+func (g *Generator) SendEach(ctx context.Context, rep Report) []SendResult {
+	out := make([]SendResult, 0, len(g.Notifiers))
 	for _, n := range g.Notifiers {
 		sctx, cancel := context.WithTimeout(ctx, sendTimeout)
 		err := n.Send(sctx, rep.Subject, rep.Body)
 		cancel()
 		if err != nil {
 			g.Log.Error("report: send failed", "channel", n.Name(), "day", rep.Day, "err", err)
-			continue
 		}
-		sent++
+		out = append(out, SendResult{Channel: n.Name(), Err: err})
 	}
-	return sent
+	return out
+}
+
+// TestMessage is the message notify-test sends.
+func (g *Generator) TestMessage() (Report, error) {
+	subject, err := g.render("test_subject", data{})
+	if err != nil {
+		return Report{}, err
+	}
+	body, err := g.render("test_body", data{})
+	if err != nil {
+		return Report{}, err
+	}
+	return Report{Day: "test", Subject: subject, Body: body}, nil
 }
 
 // Run delivers the previous day's report every day at SendAt until ctx is

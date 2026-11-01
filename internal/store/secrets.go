@@ -32,3 +32,25 @@ func (s *Store) Secret(ctx context.Context, name string, size int) ([]byte, erro
 	}
 	return v, nil
 }
+
+// GetSecret returns the named secret, or nil if it is not set.
+func (s *Store) GetSecret(ctx context.Context, name string) ([]byte, error) {
+	var v []byte
+	err := s.db.QueryRowContext(ctx, "SELECT value FROM secrets WHERE name = ?", name).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read secret %s: %w", name, err)
+	}
+	return v, nil
+}
+
+// SetSecret stores or replaces the named secret.
+func (s *Store) SetSecret(ctx context.Context, name string, value []byte) error {
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO secrets (name, value) VALUES (?, ?)
+		ON CONFLICT (name) DO UPDATE SET value = excluded.value`, name, value); err != nil {
+		return fmt.Errorf("store secret %s: %w", name, err)
+	}
+	return nil
+}

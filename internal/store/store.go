@@ -30,6 +30,9 @@ const (
 	ActionWouldChallenge = "would_challenge"
 	// ActionChallengePassed: a challenge was solved.
 	ActionChallengePassed = "challenge_passed"
+	// ActionUnblocked: an administrator lifted a block. RequestID holds
+	// "admin@" and the administrator's address.
+	ActionUnblocked = "unblocked"
 )
 
 // Event is a security event. It never contains request bodies, query strings
@@ -98,6 +101,7 @@ var migrations = []string{
 		body       TEXT    NOT NULL,
 		sent       INTEGER NOT NULL     -- number of channels that accepted it
 	);`,
+	`CREATE INDEX events_client_ts ON events (client_ip, ts);`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

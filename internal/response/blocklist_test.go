@@ -92,6 +92,44 @@ func (failingStore) ActiveBlocks(context.Context, time.Time) ([]store.Block, err
 	return nil, nil
 }
 
+func (failingStore) DeleteBlock(context.Context, string) (bool, error) {
+	return false, errors.New("disk full")
+}
+
+func TestUnblock(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "e.db")
+	c := &clock{t: time.Unix(1_800_000_000, 0)}
+	bl, err := NewBlocklist(ctx, openStore(t, path), discard(), c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bl.Block(ctx, "198.51.100.1", time.Hour, "trap")
+	if ok, err := bl.Unblock(ctx, "198.51.100.1"); !ok || err != nil {
+		t.Fatalf("Unblock = %v, %v", ok, err)
+	}
+	if bl.Blocked("198.51.100.1") {
+		t.Fatal("still blocked in memory")
+	}
+	restarted, err := NewBlocklist(ctx, openStore(t, path), discard(), c.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.Blocked("198.51.100.1") {
+		t.Fatal("block came back after restart")
+	}
+	if ok, _ := bl.Unblock(ctx, "198.51.100.1"); ok {
+		t.Error("second unblock reported a block")
+	}
+
+	// A store failure still lifts the in-memory block.
+	failing, _ := NewBlocklist(ctx, failingStore{}, discard(), c.now)
+	failing.Block(ctx, "198.51.100.2", time.Hour, "trap")
+	if ok, err := failing.Unblock(ctx, "198.51.100.2"); !ok || err == nil || failing.Blocked("198.51.100.2") {
+		t.Errorf("Unblock with failing store = %v, %v", ok, err)
+	}
+}
+
 func TestBlockSurvivesPersistFailure(t *testing.T) {
 	bl, err := NewBlocklist(context.Background(), failingStore{}, discard(), time.Now)
 	if err != nil {

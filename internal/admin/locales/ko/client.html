@@ -1,0 +1,22 @@
+{{define "title"}}{{.Data.IP}}{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head"><h1 class="mono">{{.IP}}</h1><p>클라이언트 기록</p></div>
+{{with .Block}}<section class="card tile alert stack">
+  <p><strong>지금 차단 중입니다.</strong> {{remaining .Until $.Data.Now}} 뒤에 풀립니다. 사유: {{action .Reason}}</p>
+  <div class="row"><a class="btn danger" href="/blocks/{{pathEscape .SessionID}}/unblock">차단 풀기</a></div>
+</section>{{end}}
+<section class="card stack">
+  <h2>최근 7일</h2>
+  {{if .Counts}}<ul class="legend">{{range .Counts}}<li>{{action .Key}} {{.N}}건</li>{{end}}</ul>
+  {{else}}<p class="muted">최근 7일 동안 기록된 이벤트가 없습니다.</p>{{end}}
+</section>
+<section class="card stack">
+  <h2>최근 이벤트</h2>
+  {{if .Events}}<div class="scroll"><table class="wide">
+    <thead><tr><th>시각</th><th>종류</th><th>요청</th><th></th></tr></thead>
+    <tbody>{{range .Events}}<tr><td class="nowrap">{{datetime .Time}}</td><td class="nowrap">{{action .Action}}</td>
+      <td class="mono">{{.Method}} {{clip .Path}}</td><td><a href="/events/{{.ID}}">자세히</a></td></tr>{{end}}</tbody>
+  </table></div>{{else}}<p class="muted">기록된 이벤트가 없습니다.</p>{{end}}
+  {{if .HasMore}}<div class="row"><a class="btn" href="/events?action=all&amp;ip={{.IP}}">모두 보기</a></div>{{end}}
+</section>
+{{end}}{{end}}

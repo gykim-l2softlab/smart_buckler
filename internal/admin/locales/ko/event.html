@@ -1,0 +1,19 @@
+{{define "title"}}이벤트 {{.Data.ID}}{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head"><h1>{{action .Action}}</h1><p>{{datetime .Time}}</p></div>
+<section class="card stack">
+  <p>{{actionDesc .Action}}</p>
+  <dl>
+    <dt>클라이언트</dt><dd class="mono"><a href="/clients/{{pathEscape .ClientIP}}">{{.ClientIP}}</a></dd>
+    {{if .Path}}<dt>요청</dt><dd class="mono">{{.Method}} {{clip .Host}}{{clip .Path}}</dd>{{end}}
+    {{if .Status}}<dt>응답 상태</dt><dd>{{.Status}}</dd>{{end}}
+    {{if .Score}}<dt>점수</dt><dd>{{.Score}}</dd>{{end}}
+    {{if .RequestID}}<dt>요청 ID</dt><dd class="mono">{{clip .RequestID}}</dd>{{end}}
+  </dl>
+</section>
+{{if .Signals}}<section class="card stack"><h2>나타난 자동화 징후</h2><ul>{{range .Signals}}<li>{{signal .}}</li>{{end}}</ul></section>{{end}}
+{{if .Rules}}<section class="card"><h2>걸린 WAF 규칙</h2><div class="scroll"><table>
+  <thead><tr><th>규칙</th><th>설명</th><th>심각도</th></tr></thead>
+  <tbody>{{range .Rules}}<tr><td class="nowrap">{{.ID}}</td><td>{{clip .Message}}</td><td class="nowrap">{{.Severity}}</td></tr>{{end}}</tbody>
+</table></div></section>{{end}}
+{{end}}{{end}}

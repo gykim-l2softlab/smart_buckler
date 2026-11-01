@@ -88,3 +88,13 @@ notify:
     enabled: false
     bot_token: ""
     chat_id: ""
+
+# Admin web UI. It stays closed until a password is set with
+#   l2-buckler admin-password -config FILE
+# Keep it on loopback and reach it through an SSH tunnel, or put a TLS
+# proxy in front and list its host name under hosts.
+admin:
+  enabled: true
+  listen: "127.0.0.1:8081"
+  hosts: []              # extra Host names accepted, e.g. ["admin.example.com"]
+  session_duration: 12h

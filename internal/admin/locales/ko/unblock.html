@@ -1,0 +1,13 @@
+{{define "title"}}차단 풀기{{end}}
+{{define "content"}}
+<section class="card stack">
+  <h1>차단을 풀까요?</h1>
+  <p><span class="mono">{{.Data}}</span>의 차단을 지금 풉니다. 이 주소는 바로 다시 접속할 수 있습니다.</p>
+  <p class="muted">행위 점수 기록은 남아 있어서 같은 행동을 계속하면 확인 화면이 다시 나올 수 있습니다. 미끼에 다시 접근하면 다시 차단됩니다.</p>
+  <form method="post" action="/blocks/{{pathEscape .Data}}/unblock" class="row">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button class="btn danger" type="submit">차단 풀기</button>
+    <a class="linkbtn" href="/blocks">취소</a>
+  </form>
+</section>
+{{end}}
