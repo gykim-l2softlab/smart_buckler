@@ -14,7 +14,10 @@ import (
 	"time"
 
 	"github.com/gykim-l2softlab/smart_buckler/internal/config"
+	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/proxy"
+	"github.com/gykim-l2softlab/smart_buckler/internal/response"
+	"github.com/gykim-l2softlab/smart_buckler/internal/session"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
 )
@@ -56,10 +59,40 @@ func run(configPath string) error {
 	if err != nil {
 		return err
 	}
+	sessions, err := session.NewResolver(cfg.TrustedProxies)
+	if err != nil {
+		return err
+	}
+	blocklist, err := response.NewBlocklist(ctx, st, log, time.Now)
+	if err != nil {
+		return err
+	}
+	var dec *deception.Deception
+	if cfg.Deception.Enabled {
+		if dec, err = deception.Load(ctx, st, cfg.Deception.ReservedPaths, time.Now); err != nil {
+			return fmt.Errorf("load decoys: %w", err)
+		}
+		paths := make([]string, 0, len(dec.Decoys()))
+		for _, d := range dec.Decoys() {
+			paths = append(paths, d.Base+"/")
+		}
+		log.Info("decoys active", "paths", paths)
+	}
+
+	handler := proxy.New(proxy.Options{
+		Upstream:      cfg.UpstreamURL(),
+		Sessions:      sessions,
+		Blocklist:     blocklist,
+		Deception:     dec,
+		BlockDuration: cfg.Deception.BlockDuration,
+		Inspector:     engine,
+		Recorder:      recorder,
+		Log:           log,
+	})
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           proxy.New(cfg.UpstreamURL(), engine, recorder, log),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),

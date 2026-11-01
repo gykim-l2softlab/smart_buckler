@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -23,9 +26,13 @@ const (
 type Config struct {
 	Listen   string `yaml:"listen"`
 	Upstream string `yaml:"upstream"`
-	WAF      WAF    `yaml:"waf"`
-	Store    Store  `yaml:"store"`
-	Log      Log    `yaml:"log"`
+	// TrustedProxies lists proxies (CIDR or IP) in front of l2-buckler whose
+	// X-Forwarded-For header is trusted. Leave empty when clients connect directly.
+	TrustedProxies []string  `yaml:"trusted_proxies"`
+	WAF            WAF       `yaml:"waf"`
+	Deception      Deception `yaml:"deception"`
+	Store          Store     `yaml:"store"`
+	Log            Log       `yaml:"log"`
 
 	upstreamURL *url.URL
 	logLevel    slog.Level
@@ -38,6 +45,15 @@ type WAF struct {
 	// RequestBodyLimit is the number of request body bytes inspected.
 	// Bytes beyond the limit are forwarded without inspection.
 	RequestBodyLimit int `yaml:"request_body_limit"`
+}
+
+// Deception configures decoy paths.
+type Deception struct {
+	Enabled bool `yaml:"enabled"`
+	// BlockDuration is how long a session that requested a decoy stays blocked.
+	BlockDuration time.Duration `yaml:"block_duration"`
+	// ReservedPaths are real upstream path prefixes decoys must never overlap.
+	ReservedPaths []string `yaml:"reserved_paths"`
 }
 
 // Store configures the SQLite event store.
@@ -57,6 +73,10 @@ func Default() Config {
 		WAF: WAF{
 			Mode:             WAFModeDetect,
 			RequestBodyLimit: 1 << 20,
+		},
+		Deception: Deception{
+			Enabled:       true,
+			BlockDuration: time.Hour,
 		},
 		Store: Store{Path: "l2-buckler.db"},
 		Log:   Log{Level: "info"},
@@ -112,6 +132,21 @@ func (c *Config) validate() error {
 		return errors.New("waf.request_body_limit must be positive")
 	}
 
+	for _, p := range c.TrustedProxies {
+		if err := validIPOrPrefix(p); err != nil {
+			return fmt.Errorf("trusted_proxies: %q: %w", p, err)
+		}
+	}
+
+	if c.Deception.BlockDuration <= 0 {
+		return errors.New("deception.block_duration must be positive")
+	}
+	for _, p := range c.Deception.ReservedPaths {
+		if !strings.HasPrefix(p, "/") || p == "/" {
+			return fmt.Errorf("deception.reserved_paths: %q must start with / and not be / itself", p)
+		}
+	}
+
 	if c.Store.Path == "" {
 		return errors.New("store.path is required")
 	}
@@ -120,6 +155,15 @@ func (c *Config) validate() error {
 		return fmt.Errorf("log.level: %w", err)
 	}
 	return nil
+}
+
+func validIPOrPrefix(s string) error {
+	if strings.Contains(s, "/") {
+		_, err := netip.ParsePrefix(s)
+		return err
+	}
+	_, err := netip.ParseAddr(s)
+	return err
 }
 
 // UpstreamURL returns the parsed upstream URL. Valid only after Parse succeeds.

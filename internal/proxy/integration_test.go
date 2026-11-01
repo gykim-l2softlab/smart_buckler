@@ -69,7 +69,7 @@ func blockingHandler(t *testing.T) (*Handler, *upstream, *fakeRecorder) {
 	}
 	up := newUpstream(t)
 	rec := &fakeRecorder{}
-	return newHandler(t, up, engine, rec), up, rec
+	return newHandlerWith(t, up, engine, rec, loadDeception(t), nil), up, rec
 }
 
 // Benign traffic must never be blocked, even in block mode.

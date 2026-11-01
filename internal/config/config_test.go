@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParse(t *testing.T) {
@@ -28,6 +29,9 @@ func TestParse(t *testing.T) {
 				if c.LogLevel() != slog.LevelInfo {
 					t.Errorf("log level = %v", c.LogLevel())
 				}
+				if !c.Deception.Enabled || c.Deception.BlockDuration != time.Hour || len(c.TrustedProxies) != 0 {
+					t.Errorf("unexpected deception defaults: %+v", c.Deception)
+				}
 			},
 		},
 		{
@@ -35,6 +39,11 @@ func TestParse(t *testing.T) {
 			yaml: `
 listen: ":9000"
 upstream: https://app.internal
+trusted_proxies: ["127.0.0.1", "10.0.0.0/8"]
+deception:
+  enabled: false
+  block_duration: 10m
+  reserved_paths: ["/admin", "/api/"]
 waf:
   mode: block
   request_body_limit: 4096
@@ -45,7 +54,9 @@ log:
 `,
 			check: func(t *testing.T, c Config) {
 				if c.Listen != ":9000" || c.WAF.Mode != WAFModeBlock || c.WAF.RequestBodyLimit != 4096 ||
-					c.Store.Path != "/var/lib/l2-buckler/events.db" || c.LogLevel() != slog.LevelDebug {
+					c.Store.Path != "/var/lib/l2-buckler/events.db" || c.LogLevel() != slog.LevelDebug ||
+					len(c.TrustedProxies) != 2 || c.Deception.Enabled || c.Deception.BlockDuration != 10*time.Minute ||
+					len(c.Deception.ReservedPaths) != 2 {
 					t.Errorf("unexpected config: %+v", c)
 				}
 			},
@@ -56,6 +67,11 @@ log:
 		{name: "bad mode", yaml: "upstream: http://a\nwaf:\n  mode: off\n", wantErr: "waf.mode"},
 		{name: "bad body limit", yaml: "upstream: http://a\nwaf:\n  request_body_limit: 0\n", wantErr: "request_body_limit"},
 		{name: "bad log level", yaml: "upstream: http://a\nlog:\n  level: loud\n", wantErr: "log.level"},
+		{name: "bad trusted proxy", yaml: "upstream: http://a\ntrusted_proxies: [proxy.local]\n", wantErr: "trusted_proxies"},
+		{name: "bad block duration", yaml: "upstream: http://a\ndeception:\n  block_duration: 0s\n", wantErr: "block_duration"},
+		{name: "unparsable duration", yaml: "upstream: http://a\ndeception:\n  block_duration: forever\n", wantErr: "parse config"},
+		{name: "reserved root", yaml: "upstream: http://a\ndeception:\n  reserved_paths: [\"/\"]\n", wantErr: "reserved_paths"},
+		{name: "reserved relative", yaml: "upstream: http://a\ndeception:\n  reserved_paths: [admin]\n", wantErr: "reserved_paths"},
 		{name: "empty store path", yaml: "upstream: http://a\nstore:\n  path: \"\"\n", wantErr: "store.path"},
 	}
 	for _, tt := range tests {

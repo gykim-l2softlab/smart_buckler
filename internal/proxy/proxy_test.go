@@ -1,17 +1,23 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/gykim-l2softlab/smart_buckler/internal/deception"
 	"github.com/gykim-l2softlab/smart_buckler/internal/redact"
+	"github.com/gykim-l2softlab/smart_buckler/internal/response"
+	"github.com/gykim-l2softlab/smart_buckler/internal/session"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
 )
@@ -79,11 +85,39 @@ func newUpstream(t *testing.T) *upstream {
 
 func newHandler(t *testing.T, up *upstream, insp Inspector, rec Recorder) *Handler {
 	t.Helper()
+	return newHandlerWith(t, up, insp, rec, nil, nil)
+}
+
+// newHandlerWith builds a Handler with a fresh store. dec may be nil
+// (deception disabled); trusted lists trusted proxies.
+func newHandlerWith(t testing.TB, up *upstream, insp Inspector, rec Recorder, dec *deception.Deception, trusted []string) *Handler {
+	t.Helper()
 	u, err := url.Parse(up.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(u, insp, rec, discardLogger())
+	sessions, err := session.NewResolver(trusted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bl, err := response.NewBlocklist(context.Background(), tempStore(t), discardLogger(), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(Options{
+		Upstream: u, Sessions: sessions, Blocklist: bl, Deception: dec, BlockDuration: time.Hour,
+		Inspector: insp, Recorder: rec, Log: discardLogger(),
+	})
+}
+
+func tempStore(t testing.TB) *store.Store {
+	t.Helper()
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "e.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	return st
 }
 
 func TestPassThrough(t *testing.T) {
