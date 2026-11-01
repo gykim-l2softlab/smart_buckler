@@ -1,4 +1,5 @@
 BIN := bin/l2-buckler
+CONFIG ?= configs/dev.yaml
 
 .PHONY: build test itest bench lint run clean
 
@@ -18,7 +19,7 @@ lint:
 	golangci-lint run
 
 run:
-	go run ./cmd/l2-buckler -config configs/dev.yaml
+	go run ./cmd/l2-buckler -config $(CONFIG)
 
 clean:
 	rm -rf bin

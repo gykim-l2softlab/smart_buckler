@@ -7,7 +7,7 @@
 {{- if .AISummary}}
 
 {{.AISummary}}
-(로컬 AI가 아래 숫자를 바탕으로 쓴 요약입니다. 정확한 내용은 아래 숫자를 기준으로 봐 주세요.)
+(AI가 아래 숫자를 바탕으로 쓴 요약입니다. 정확한 내용은 아래 숫자를 기준으로 봐 주세요.)
 {{- end}}
 {{if .Quiet}}
 따로 알릴 일이 없었습니다. 차단하거나 확인 화면을 보여 준 클라이언트가 없습니다.
@@ -72,18 +72,35 @@
 자세한 기록은 l2-buckler 데이터베이스의 events 테이블에서 볼 수 있습니다.
 {{end -}}
 
-{{- define "prompt" -}}
+{{- define "system" -}}
 너는 소규모 웹 서비스 운영자에게 보안 현황을 알려 주는 도우미다.
-아래는 웹 보안 프록시 l2-buckler가 {{date .Day}} 하루 동안 집계한 숫자다.
-보안 전문가가 아닌 운영자가 읽을 수 있게, 무슨 일이 있었고 무엇을 확인하면 좋을지 한국어 존댓말 두세 문장으로 요약해라.
-숫자를 새로 만들거나 바꾸지 말고, 목록이나 제목 없이 문장만 써라.
+사용자는 웹 보안 프록시 l2-buckler가 하루 동안 집계한 숫자 목록을 준다. 0인 항목은 목록에서 빠져 있다.
+이 숫자 목록은 네 답 바로 아래에 그대로 붙는다. 그러니 숫자와 규칙 이름을 되풀이하지 마라.
+대신 보안 전문가가 아닌 운영자에게 그날 상황이 어떤 의미인지, 무엇을 확인하면 좋을지를 한국어 존댓말 두세 문장으로 써라.
+확인 화면은 차단이 아니다. 사람은 확인 화면을 통과해 계속 이용할 수 있다.
+목록이나 제목 없이 문장만 써라.
+{{- end}}
 
+{{define "prompt" -}}
+{{date .Day}} 집계
+{{- if .TrapClients}}
 - 미끼 경로에 접근해 차단한 클라이언트: {{.TrapClients}}곳
-- 확인 화면을 보여 준 클라이언트: {{.ChallengedClients}}곳, 그중 통과: {{.PassedClients}}곳
+{{- end}}
+{{- if .ChallengedClients}}
+- 자동화로 보여 확인 화면을 보여 준 클라이언트: {{.ChallengedClients}}곳, 그중 통과: {{.PassedClients}}곳
+{{- end}}
+{{- if .WouldChallengeClients}}
 - 점수가 기준을 넘었지만 기록만 한 클라이언트: {{.WouldChallengeClients}}곳
+{{- end}}
+{{- if .Blocked}}
 - WAF가 막은 요청: {{.Blocked}}건
+{{- end}}
+{{- if .WouldBlock}}
 - 차단 모드였다면 막았을 요청: {{.WouldBlock}}건
+{{- end}}
+{{- if .Detected}}
 - 차단 기준에 못 미친 WAF 경고: {{.Detected}}건
+{{- end}}
 {{- with .TopRules}}
 - 자주 걸린 WAF 규칙:{{range .}} {{.Message}} {{.N}}건;{{end}}
 {{- end}}

@@ -124,12 +124,13 @@ type fakeLLM struct {
 	out    string
 	err    error
 	calls  int
+	system string
 	prompt string
 }
 
-func (f *fakeLLM) Generate(_ context.Context, prompt string) (string, error) {
+func (f *fakeLLM) Generate(_ context.Context, system, prompt string) (string, error) {
 	f.calls++
-	f.prompt = prompt
+	f.system, f.prompt = system, prompt
 	return f.out, f.err
 }
 
@@ -142,14 +143,20 @@ func TestAISummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(rep.Body, "\n\n어제는 자동화 도구 6곳이 확인 화면을 받았습니다, 그중 4곳이 통과했습니다.\n(로컬 AI가") {
+	if !strings.Contains(rep.Body, "\n\n어제는 자동화 도구 6곳이 확인 화면을 받았습니다, 그중 4곳이 통과했습니다.\n(AI가") {
 		t.Errorf("summary not placed or cleaned:\n%s", rep.Body)
 	}
 	// Attacker-controlled values never reach the model.
 	for _, leak := range []string{"/db-export", "/item", "198.51.100.7", "/board"} {
-		if strings.Contains(llm.prompt, leak) {
+		if strings.Contains(llm.system+llm.prompt, leak) {
 			t.Errorf("prompt contains %q", leak)
 		}
+	}
+	if !strings.Contains(llm.system, "되풀이하지 마라") {
+		t.Errorf("system prompt = %q", llm.system)
+	}
+	if strings.Contains(llm.prompt, ": 0곳") || strings.Contains(llm.prompt, ": 0건") {
+		t.Errorf("prompt lists zero counts:\n%s", llm.prompt)
 	}
 	if !strings.Contains(llm.prompt, "확인 화면을 보여 준 클라이언트: 6곳, 그중 통과: 4곳") {
 		t.Errorf("prompt lacks counts:\n%s", llm.prompt)
@@ -157,7 +164,7 @@ func TestAISummary(t *testing.T) {
 
 	failing := &fakeLLM{err: errors.New("connection refused")}
 	rep2, err := newGen(t, st, Options{LLM: failing}).Build(context.Background(), "2026-10-31")
-	if err != nil || strings.Contains(rep2.Body, "로컬 AI") {
+	if err != nil || strings.Contains(rep2.Body, "AI가 아래") {
 		t.Errorf("failed llm should fall back: %v\n%s", err, rep2.Body)
 	}
 }
@@ -246,32 +253,107 @@ func TestRunCatchesUp(t *testing.T) {
 	<-done
 }
 
-func TestOllama(t *testing.T) {
+func TestChat(t *testing.T) {
 	var req map[string]any
+	var auth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/generate" {
+		if r.URL.Path != "/v1/chat/completions" {
 			http.NotFound(w, r)
 			return
 		}
+		auth = r.Header.Get("Authorization")
+		req = nil
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		_, _ = w.Write([]byte(`{"model":"m","response":"요약입니다.","done":true}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"요약입니다."}}]}`))
 	}))
 	defer srv.Close()
-	o := &Ollama{URL: srv.URL + "/", Model: "qwen3:4b", Timeout: time.Second}
-	out, err := o.Generate(context.Background(), "p")
+
+	c := &Chat{URL: srv.URL + "/v1/", Model: "qwen3:4b", Timeout: time.Second}
+	out, err := c.Generate(context.Background(), "s", "p")
 	if err != nil || out != "요약입니다." {
 		t.Fatalf("Generate = %q, %v", out, err)
 	}
-	if req["model"] != "qwen3:4b" || req["stream"] != false || req["prompt"] != "p" {
+	msgs, _ := json.Marshal(req["messages"])
+	if req["model"] != "qwen3:4b" || string(msgs) != `[{"content":"s","role":"system"},{"content":"p","role":"user"}]` {
 		t.Errorf("request = %v", req)
 	}
+	if _, ok := req["reasoning_effort"]; ok || auth != "" {
+		t.Errorf("unset options sent: %v, auth %q", req, auth)
+	}
 
-	missing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c.APIKey, c.ReasoningEffort = "sk-test", "none"
+	if _, err := c.Generate(context.Background(), "s", "p"); err != nil {
+		t.Fatal(err)
+	}
+	if req["reasoning_effort"] != "none" || auth != "Bearer sk-test" {
+		t.Errorf("reasoning_effort = %v, auth %q", req["reasoning_effort"], auth)
+	}
+
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"error":"model \"x\" not found"}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"model \"x\" not found"}}`))
 	}))
-	defer missing.Close()
-	if _, err := (&Ollama{URL: missing.URL, Model: "x", Timeout: time.Second}).Generate(context.Background(), "p"); err == nil || !strings.Contains(err.Error(), "not found") {
+	defer failing.Close()
+	_, err = (&Chat{URL: failing.URL, Model: "x", APIKey: "sk-secret", Timeout: time.Second}).Generate(context.Background(), "s", "p")
+	if err == nil || !strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "sk-secret") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestAnthropic(t *testing.T) {
+	var req map[string]any
+	var header http.Header
+	reply := `{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"요약"},{"type":"text","text":"입니다."}],"stop_reason":"end_turn"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/messages" {
+			http.NotFound(w, r)
+			return
+		}
+		header = r.Header.Clone()
+		req = nil
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		_, _ = w.Write([]byte(reply))
+	}))
+	defer srv.Close()
+
+	a := &Anthropic{URL: srv.URL + "/v1", Model: "claude-opus-5-5", APIKey: "sk-ant-test", Timeout: time.Second}
+	out, err := a.Generate(context.Background(), "s", "p")
+	if err != nil || out != "요약입니다." {
+		t.Fatalf("Generate = %q, %v", out, err)
+	}
+	if header.Get("x-api-key") != "sk-ant-test" || header.Get("anthropic-version") != anthropicVersion {
+		t.Errorf("headers = %v", header)
+	}
+	msgs, _ := json.Marshal(req["messages"])
+	if req["model"] != "claude-opus-5-5" || req["system"] != "s" || string(msgs) != `[{"content":"p","role":"user"}]` {
+		t.Errorf("request = %v", req)
+	}
+	for _, k := range []string{"temperature", "output_config"} {
+		if _, ok := req[k]; ok {
+			t.Errorf("%s sent: %v", k, req)
+		}
+	}
+
+	a.Effort = "low"
+	if _, err := a.Generate(context.Background(), "s", "p"); err != nil {
+		t.Fatal(err)
+	}
+	if oc, _ := req["output_config"].(map[string]any); oc["effort"] != "low" {
+		t.Errorf("output_config = %v", req["output_config"])
+	}
+
+	reply = `{"content":[],"stop_reason":"refusal"}`
+	if _, err := a.Generate(context.Background(), "s", "p"); err == nil || !strings.Contains(err.Error(), "declined") {
+		t.Errorf("refusal err = %v", err)
+	}
+
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`))
+	}))
+	defer failing.Close()
+	_, err = (&Anthropic{URL: failing.URL, Model: "m", APIKey: "sk-ant-secret", Timeout: time.Second}).Generate(context.Background(), "s", "p")
+	if err == nil || !strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "sk-ant-secret") {
 		t.Errorf("err = %v", err)
 	}
 }

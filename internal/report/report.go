@@ -47,9 +47,9 @@ type Notifier interface {
 	Send(ctx context.Context, subject, body string) error
 }
 
-// LLM writes text from a prompt. Optional.
+// LLM writes text from a prompt, following the system instructions. Optional.
 type LLM interface {
-	Generate(ctx context.Context, prompt string) (string, error)
+	Generate(ctx context.Context, system, prompt string) (string, error)
 }
 
 // Options configures a Generator.
@@ -189,12 +189,17 @@ func (g *Generator) Build(ctx context.Context, day string) (Report, error) {
 // labels and CRS rule messages go into the prompt, never request paths or
 // other attacker-controlled text. Failures fall back to the plain report.
 func (g *Generator) summarize(ctx context.Context, d data) string {
+	system, err := g.render("system", d)
+	if err != nil {
+		g.Log.Warn("report: build llm prompt", "err", err)
+		return ""
+	}
 	prompt, err := g.render("prompt", d)
 	if err != nil {
 		g.Log.Warn("report: build llm prompt", "err", err)
 		return ""
 	}
-	out, err := g.LLM.Generate(ctx, prompt)
+	out, err := g.LLM.Generate(ctx, system, prompt)
 	if err != nil {
 		g.Log.Warn("report: llm summary failed, sending without it", "err", err)
 		return ""
