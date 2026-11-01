@@ -1,0 +1,2 @@
+# Raw HTTP fixtures: keep CRLF bytes exact (Content-Length depends on them)
+*.http -text

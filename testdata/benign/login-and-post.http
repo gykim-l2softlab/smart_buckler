@@ -1,0 +1,41 @@
+GET /login HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8
+Accept-Encoding: gzip, deflate, br
+
+POST /login HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Content-Type: application/x-www-form-urlencoded
+Accept: text/html,application/xhtml+xml
+Origin: http://app.example.com
+Referer: http://app.example.com/login
+Content-Length: 64
+
+username=alice&password=correct+horse+battery+staple&remember=onPOST /api/board HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Content-Type: application/json
+Accept: application/json
+Origin: http://app.example.com
+Referer: http://app.example.com/board
+Content-Length: 147
+
+{"title":"주간 회의록","body":"다음 주 배포 일정을 공유합니다. 질문은 댓글로 남겨 주세요.","tags":["회의","배포"]}GET /api/board/1043 HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Accept: application/json
+Referer: http://app.example.com/board
+
+POST /logout HTTP/1.1
+Host: app.example.com
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15
+Content-Type: application/x-www-form-urlencoded
+Accept: text/html,application/xhtml+xml
+Origin: http://app.example.com
+Referer: http://app.example.com/login
+Content-Length: 13
+
+csrf=4f1c2a9b
