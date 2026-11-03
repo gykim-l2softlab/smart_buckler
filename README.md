@@ -209,14 +209,6 @@ make run                       # configs/dev.yaml로 실행
 make run CONFIG=다른설정.yaml
 ```
 
-## 로드맵
-
-- [x] 1. 리버스 프록시 + Coraza WAF + SQLite 이벤트 로깅
-- [x] 2. 미끼 경로 자동 생성과 접근 시 즉시 차단
-- [x] 3. 규칙 기반 행위 점수와 PoW 챌린지
-- [x] 4. 일일 요약 리포트와 알림
-- [x] 5. 관리 웹 UI
-
 ## 기술 스택
 
 Go, Coraza v3 + OWASP CRS, SQLite(`modernc.org/sqlite`, cgo 없음), YAML 설정, `log/slog` JSON 로그
