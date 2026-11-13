@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// PoWPath receives challenge solutions. It is handled by l2-buckler and never
+// PoWPath receives challenge solutions. It is handled by smart_buckler and never
 // forwarded upstream.
 const PoWPath = "/.l2b/pow"
 

@@ -37,7 +37,7 @@ const (
 type Config struct {
 	Listen   string `yaml:"listen"`
 	Upstream string `yaml:"upstream"`
-	// TrustedProxies lists proxies (CIDR or IP) in front of l2-buckler whose
+	// TrustedProxies lists proxies (CIDR or IP) in front of smart_buckler whose
 	// X-Forwarded-For header is trusted. Leave empty when clients connect directly.
 	TrustedProxies []string  `yaml:"trusted_proxies"`
 	WAF            WAF       `yaml:"waf"`
@@ -126,7 +126,7 @@ type LLM struct {
 
 // Admin configures the administration web UI. It listens separately from
 // the proxy and stays closed until a password is set with
-// "l2-buckler admin-password".
+// "smart_buckler admin-password".
 type Admin struct {
 	Enabled bool `yaml:"enabled"`
 	// Listen is the admin address. Keep it on loopback and reach it through
@@ -208,7 +208,7 @@ func Default() Config {
 			LLM:  LLM{Provider: "openai", Timeout: 2 * time.Minute},
 		},
 		Notify: Notify{Email: Email{Port: 587}},
-		Store:  Store{Path: "l2-buckler.db"},
+		Store:  Store{Path: "smart_buckler.db"},
 		Log:    Log{Level: "info"},
 	}
 }

@@ -9,12 +9,12 @@ waf:
   request_body_limit: 1048576
 
 store:
-  path: "l2-buckler.db"
+  path: "smart_buckler.db"
 
 log:
   level: debug
 
-# Proxies in front of l2-buckler whose X-Forwarded-For is trusted (CIDR or IP).
+# Proxies in front of smart_buckler whose X-Forwarded-For is trusted (CIDR or IP).
 # Required when running behind another proxy or tunnel, otherwise a trap hit
 # would block the proxy address and every client behind it.
 trusted_proxies: []
@@ -71,7 +71,7 @@ report:
     timeout: 2m
 
 # Delivery channels. All off by default. Keep this file readable only by
-# the l2-buckler user (chmod 600) when it holds passwords or tokens.
+# the smart_buckler user (chmod 600) when it holds passwords or tokens.
 notify:
   email:
     enabled: false
@@ -79,7 +79,7 @@ notify:
     port: 587            # 465 uses implicit TLS; others use STARTTLS when offered
     username: ""
     password: ""
-    from: "l2-buckler <security@example.com>"
+    from: "smart_buckler <security@example.com>"
     to: ["ops@example.com"]
   slack:
     enabled: false
@@ -90,7 +90,7 @@ notify:
     chat_id: ""
 
 # Admin web UI. It stays closed until a password is set with
-#   l2-buckler admin-password -config FILE
+#   smart_buckler admin-password -config FILE
 # Keep it on loopback and reach it through an SSH tunnel, or put a TLS
 # proxy in front and list its host name under hosts.
 admin:

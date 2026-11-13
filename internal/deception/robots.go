@@ -143,7 +143,7 @@ func (r *robotsRules) disallows(p string) bool {
 }
 
 // UpstreamDisallows reports whether upstream's robots.txt, as last served
-// through l2-buckler, disallows urlPath for all crawlers. It is false until
+// through smart_buckler, disallows urlPath for all crawlers. It is false until
 // someone has fetched robots.txt.
 func (d *Deception) UpstreamDisallows(urlPath string) bool {
 	r := d.upstreamRobots.Load()

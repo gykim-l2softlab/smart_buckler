@@ -166,10 +166,10 @@ func TestEmail(t *testing.T) {
 	p, _ := strconv.Atoi(port)
 	e := &Email{
 		Host: host, Port: p, Username: "bot", Password: "pw",
-		From: "l2-buckler <bot@example.com>", To: []string{"ops@example.com", "Kim <kim@example.com>"},
+		From: "smart_buckler <bot@example.com>", To: []string{"ops@example.com", "Kim <kim@example.com>"},
 	}
 	body := strings.Repeat("어제 하루 동안의 요약입니다.\n", 10)
-	if err := e.Send(context.Background(), "[l2-buckler] 2026년 10월 31일 보안 요약", body); err != nil {
+	if err := e.Send(context.Background(), "[smart_buckler] 2026년 10월 31일 보안 요약", body); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,7 +187,7 @@ func TestEmail(t *testing.T) {
 		t.Fatal(err)
 	}
 	subject, _ := new(mime.WordDecoder).DecodeHeader(msg.Header.Get("Subject"))
-	if subject != "[l2-buckler] 2026년 10월 31일 보안 요약" {
+	if subject != "[smart_buckler] 2026년 10월 31일 보안 요약" {
 		t.Errorf("subject = %q", subject)
 	}
 	raw, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, msg.Body))

@@ -1,10 +1,10 @@
-BIN := bin/l2-buckler
+BIN := bin/smart_buckler
 CONFIG ?= configs/dev.yaml
 
 .PHONY: build test itest bench lint run clean
 
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/l2-buckler
+	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/smart_buckler
 
 test:
 	go test -race ./...
@@ -19,7 +19,7 @@ lint:
 	golangci-lint run
 
 run:
-	go run ./cmd/l2-buckler -config $(CONFIG)
+	go run ./cmd/smart_buckler -config $(CONFIG)
 
 clean:
 	rm -rf bin

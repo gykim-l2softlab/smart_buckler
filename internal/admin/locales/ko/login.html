@@ -1,7 +1,7 @@
 {{define "title"}}로그인{{end}}
 {{define "content"}}{{with .Data}}
 <section class="card login stack">
-  <h1>l2-buckler 관리</h1>
+  <h1>smart_buckler 관리</h1>
   {{if .PasswordSet}}
   {{with .Error}}<p class="flash err" role="alert">{{.}}</p>{{end}}
   <form method="post" action="/login" class="stack">
@@ -11,7 +11,7 @@
   {{else}}
   <p>관리자 비밀번호가 아직 없어서 관리 화면이 닫혀 있습니다.</p>
   <p>서버에서 아래 명령으로 비밀번호를 정한 뒤 이 페이지를 새로 고치세요.</p>
-  <pre>l2-buckler admin-password -config 설정파일</pre>
+  <pre>smart_buckler admin-password -config 설정파일</pre>
   {{end}}
 </section>
 {{end}}{{end}}

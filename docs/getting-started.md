@@ -1,6 +1,6 @@
 # 시작하기
 
-이 문서는 l2-buckler를 빌드하고 웹 서비스 앞에 두는 방법을 설명합니다.
+이 문서는 smart_buckler를 빌드하고 웹 서비스 앞에 두는 방법을 설명합니다.
 현재 4단계(리버스 프록시, WAF, 이벤트 기록, 미끼 경로, 행위 점수와 챌린지, 일일 요약과 알림)까지 구현되어 있습니다.
 
 ## 빌드
@@ -11,16 +11,16 @@ Go가 설치되어 있어야 합니다. 버전은 `go.mod`를 따릅니다.
 make build
 ```
 
-`bin/l2-buckler` 단일 실행 파일이 만들어집니다. cgo를 쓰지 않으므로 다른 라이브러리 없이 바로 실행됩니다.
+`bin/smart_buckler` 단일 실행 파일이 만들어집니다. cgo를 쓰지 않으므로 다른 라이브러리 없이 바로 실행됩니다.
 
 ## 설정
 
 YAML 파일 하나로 설정합니다. 꼭 적어야 하는 값은 `upstream` 하나뿐입니다.
 
 ```yaml
-listen: ":8080"                      # l2-buckler가 요청을 받을 주소
+listen: ":8080"                      # smart_buckler가 요청을 받을 주소
 upstream: "http://127.0.0.1:3000"    # 보호할 웹 서비스 주소
-trusted_proxies: []                  # l2-buckler 앞에 있는 프록시 주소 (아래 설명 참고)
+trusted_proxies: []                  # smart_buckler 앞에 있는 프록시 주소 (아래 설명 참고)
 
 deception:
   enabled: true                      # 미끼 경로 사용 여부
@@ -47,7 +47,7 @@ report:
 notify: {}                           # 알림 채널. 아래 "일일 요약과 알림" 참고
 
 store:
-  path: "l2-buckler.db"              # 이벤트를 저장할 SQLite 파일
+  path: "smart_buckler.db"              # 이벤트를 저장할 SQLite 파일
 
 log:
   level: info                        # debug, info, warn, error
@@ -66,7 +66,7 @@ log:
 
 ### 앞단에 프록시가 있을 때 (`trusted_proxies`)
 
-l2-buckler는 접속한 주소를 클라이언트로 봅니다. 앞에 Nginx, Cloudflare Tunnel, 로드밸런서 같은 프록시가 있으면 모든 요청이 그 프록시 주소에서 오는 것처럼 보입니다. 이 상태에서 미끼에 한 번만 접근해도 프록시 뒤의 모든 사용자가 함께 막힐 수 있습니다.
+smart_buckler는 접속한 주소를 클라이언트로 봅니다. 앞에 Nginx, Cloudflare Tunnel, 로드밸런서 같은 프록시가 있으면 모든 요청이 그 프록시 주소에서 오는 것처럼 보입니다. 이 상태에서 미끼에 한 번만 접근해도 프록시 뒤의 모든 사용자가 함께 막힐 수 있습니다.
 
 이런 구성이라면 프록시 주소를 꼭 적어 주세요.
 
@@ -108,7 +108,7 @@ HTML에 링크를 넣으려면 압축된 응답을 풀었다 다시 압축해야
 
 ## 행위 점수와 챌린지
 
-l2-buckler는 클라이언트(IP 주소)마다 최근 2분 동안의 요청을 기억하고, 자동화 도구에서 흔히 보이는 행동을 찾아 점수를 매깁니다. 점수가 `threshold` 이상이 되면 다음 페이지 요청에 챌린지 화면을 보여 줍니다.
+smart_buckler는 클라이언트(IP 주소)마다 최근 2분 동안의 요청을 기억하고, 자동화 도구에서 흔히 보이는 행동을 찾아 점수를 매깁니다. 점수가 `threshold` 이상이 되면 다음 페이지 요청에 챌린지 화면을 보여 줍니다.
 
 | 신호 | 기본 가중치 | 언제 켜지나 |
 |---|---|---|
@@ -149,7 +149,7 @@ score:
 ## 실행
 
 ```sh
-./bin/l2-buckler -config /etc/l2-buckler/l2-buckler.yaml
+./bin/smart_buckler -config /etc/smart_buckler/smart_buckler.yaml
 ```
 
 로그는 JSON 형식으로 표준 출력에 나옵니다. 종료 신호(SIGTERM, Ctrl+C)를 받으면 처리 중인 요청을 마치고, 남은 이벤트를 저장한 다음 종료합니다.
@@ -159,7 +159,7 @@ score:
 WAF 규칙에 걸리거나, 미끼에 접근하거나, 행위 점수가 기준을 넘은 요청은 SQLite 파일의 `events` 테이블에 쌓입니다.
 
 ```sh
-sqlite3 l2-buckler.db \
+sqlite3 smart_buckler.db \
   "SELECT datetime(ts/1000, 'unixepoch', 'localtime'), client_ip, method, path, status, action, score, signals, rules
    FROM events ORDER BY ts DESC LIMIT 20"
 ```
@@ -181,11 +181,11 @@ sqlite3 l2-buckler.db \
 차단된 클라이언트가 그 뒤에 보내는 요청은 기록하지 않습니다. 차단된 봇은 짧은 시간에 수천 건을 보낼 수 있기 때문입니다. 현재 차단 목록은 `blocks` 테이블에서 볼 수 있습니다.
 
 ```sh
-sqlite3 l2-buckler.db \
+sqlite3 smart_buckler.db \
   "SELECT session_id, datetime(until/1000, 'unixepoch', 'localtime'), reason FROM blocks"
 ```
 
-차단을 바로 풀려면 l2-buckler를 멈춘 뒤 해당 행을 지우고 다시 시작하세요.
+차단을 바로 풀려면 smart_buckler를 멈춘 뒤 해당 행을 지우고 다시 시작하세요.
 
 차단 응답에는 `request id`가 함께 표시됩니다. 사용자가 차단 화면을 알려 오면 이 값으로 `events` 테이블의 `request_id`를 찾으면 됩니다.
 
@@ -203,9 +203,9 @@ sqlite3 l2-buckler.db \
 - 가장 많이 걸린 클라이언트 IP, 가장 많이 노린 경로, 자주 걸린 WAF 규칙, 자주 나타난 자동화 징후 (각각 상위 5개)
 - 챌린지를 통과한 비율이 높으면 사람이 걸렸을 수 있다는 안내
 
-아무 일도 없던 날에도 "따로 알릴 일이 없었습니다"라는 요약을 보냅니다. l2-buckler가 살아 있다는 확인이 되기 때문입니다.
+아무 일도 없던 날에도 "따로 알릴 일이 없었습니다"라는 요약을 보냅니다. smart_buckler가 살아 있다는 확인이 되기 때문입니다.
 
-만든 요약은 SQLite의 `reports` 테이블에 날짜별로 남습니다. 같은 날의 요약은 한 번만 보내므로 재시작해도 중복으로 받지 않습니다. 발송 시각이 지난 뒤에 l2-buckler를 시작하면 놓친 전날 요약을 바로 보냅니다.
+만든 요약은 SQLite의 `reports` 테이블에 날짜별로 남습니다. 같은 날의 요약은 한 번만 보내므로 재시작해도 중복으로 받지 않습니다. 발송 시각이 지난 뒤에 smart_buckler를 시작하면 놓친 전날 요약을 바로 보냅니다.
 
 ### 알림 채널
 
@@ -219,7 +219,7 @@ notify:
     port: 587              # 465는 처음부터 TLS, 그 밖의 포트는 서버가 지원하면 STARTTLS
     username: "security@example.com"
     password: "앱 비밀번호"
-    from: "l2-buckler <security@example.com>"
+    from: "smart_buckler <security@example.com>"
     to: ["ops@example.com"]
   slack:
     enabled: true
@@ -230,22 +230,22 @@ notify:
     chat_id: "-1001234567890"    # 메시지를 받을 대화방 ID
 ```
 
-비밀번호와 토큰이 들어가므로 설정 파일은 l2-buckler 실행 계정만 읽을 수 있게 두세요(`chmod 600`). 이메일 비밀번호는 TLS 연결에서만 보냅니다(서버가 localhost인 경우는 예외).
+비밀번호와 토큰이 들어가므로 설정 파일은 smart_buckler 실행 계정만 읽을 수 있게 두세요(`chmod 600`). 이메일 비밀번호는 TLS 연결에서만 보냅니다(서버가 localhost인 경우는 예외).
 
 요약에는 클라이언트 IP와 요청 경로가 들어갑니다. 알림을 받는 사람과 채널을 정할 때 참고하세요.
 
 설정을 마쳤으면 테스트 메시지로 확인합니다.
 
 ```sh
-./bin/l2-buckler notify-test -config l2-buckler.yaml
+./bin/smart_buckler notify-test -config smart_buckler.yaml
 ```
 
 ### 요약 미리 보기와 직접 보내기
 
 ```sh
-./bin/l2-buckler report -config l2-buckler.yaml                    # 어제 요약을 화면에 출력
-./bin/l2-buckler report -config l2-buckler.yaml -date 2026-10-31   # 특정 날짜
-./bin/l2-buckler report -config l2-buckler.yaml -send              # 켜 둔 채널로 보내기
+./bin/smart_buckler report -config smart_buckler.yaml                    # 어제 요약을 화면에 출력
+./bin/smart_buckler report -config smart_buckler.yaml -date 2026-10-31   # 특정 날짜
+./bin/smart_buckler report -config smart_buckler.yaml -send              # 켜 둔 채널로 보내기
 ```
 
 `-send`로 보낸 요약은 `reports` 테이블에 남기지 않으므로 정해진 시각의 발송에는 영향이 없습니다.
@@ -257,7 +257,7 @@ notify:
 - `openai`(기본): OpenAI 호환 API(`/v1/chat/completions`). 같은 서버의 [Ollama](https://ollama.com), LM Studio, vLLM 같은 로컬 모델과, 이 형식을 지원하는 외부 API에 쓸 수 있습니다.
 - `anthropic`: Claude Messages API.
 
-어떤 모델을 쓸지는 운영자가 정합니다. l2-buckler는 `model`과 `reasoning_effort`를 그대로 넘깁니다. 외부 라이브러리 없이 표준 라이브러리로 호출합니다.
+어떤 모델을 쓸지는 운영자가 정합니다. smart_buckler는 `model`과 `reasoning_effort`를 그대로 넘깁니다. 외부 라이브러리 없이 표준 라이브러리로 호출합니다.
 
 로컬 Ollama:
 
@@ -287,7 +287,7 @@ report:
 `url`을 비워 두면 `openai`는 `http://127.0.0.1:11434/v1`, `anthropic`은 `https://api.anthropic.com/v1`을 씁니다. 다른 서버나 외부 OpenAI 호환 API를 쓸 때만 적어 주세요.
 
 - **보내는 내용**: 날짜, 집계 숫자, WAF 규칙 설명(CRS에 미리 정해진 영어 문구), 자동화 징후 이름만 보냅니다. 요청 경로, IP, User-Agent처럼 공격자가 마음대로 넣을 수 있는 값이나 개인정보는 보내지 않습니다. 공격자가 요청에 숨긴 문장으로 요약을 조작하지 못하게 하기 위해서이기도 합니다.
-- **외부 API를 쓸 때**: 제공사는 이 서버가 l2-buckler를 쓴다는 사실과 하루 공격 규모를 알게 됩니다. 데이터 보관 정책은 제공사마다 다르니 확인한 뒤 켜 주세요. 원격 주소에 API 키를 보낼 때는 `https`만 허용합니다. 키가 들어 있는 설정 파일은 `chmod 600`으로 보호하세요.
+- **외부 API를 쓸 때**: 제공사는 이 서버가 smart_buckler를 쓴다는 사실과 하루 공격 규모를 알게 됩니다. 데이터 보관 정책은 제공사마다 다르니 확인한 뒤 켜 주세요. 원격 주소에 API 키를 보낼 때는 `https`만 허용합니다. 키가 들어 있는 설정 파일은 `chmod 600`으로 보호하세요.
 - **`reasoning_effort`**: 추론 모델이 답하기 전에 생각하는 정도입니다. GPU 없이 CPU로 돌리면 생각 단계만으로 몇 분이 걸려 `timeout`을 넘길 수 있습니다.
   - `openai`: `none`, `minimal`, `low`, `medium`, `high`. Ollama의 qwen3 등은 `"none"`으로 생각 단계를 끄고, gpt-oss는 끌 수 없으므로 `"low"`를 권장합니다.
   - `anthropic`: `low`, `medium`, `high`, `xhigh`, `max`. 짧은 요약이므로 `"low"`면 충분합니다.
@@ -306,7 +306,7 @@ report:
 처음에는 비밀번호가 없어서 관리 화면이 닫혀 있습니다. 서버에서 아래 명령을 실행해 비밀번호를 정하세요. 12자 이상이어야 하고, 두 번 입력합니다.
 
 ```sh
-./bin/l2-buckler admin-password -config /etc/l2-buckler/l2-buckler.yaml
+./bin/smart_buckler admin-password -config /etc/smart_buckler/smart_buckler.yaml
 ```
 
 프록시가 실행 중이어도 바로 적용됩니다. 비밀번호를 바꾸면 이전에 로그인한 세션은 모두 끝납니다. 스크립트에서 쓸 때는 표준 입력으로 한 줄을 넘기면 됩니다.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>{{block "title" .}}관리{{end}} - l2-buckler</title>
+<title>{{block "title" .}}관리{{end}} - smart_buckler</title>
 <style nonce="{{.Nonce}}">
 :root {
   --bg: #f4f6f8; --surface: #ffffff; --line: #dde2e7; --grid: #e9edf1;
@@ -114,7 +114,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 </head>
 <body>
 {{if .CSRF}}<header class="topbar"><div class="wrap">
-  <a class="brand" href="/">l2-buckler <small>관리</small></a>
+  <a class="brand" href="/">smart_buckler <small>관리</small></a>
   <nav aria-label="주 메뉴"><ul>
     <li><a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>개요</a></li>
     <li><a href="/events"{{if eq .Nav "events"}} aria-current="page"{{end}}>이벤트</a></li>

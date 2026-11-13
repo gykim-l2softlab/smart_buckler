@@ -8,7 +8,7 @@ smart-buckler(가칭)는 가볍고 셀프호스팅 가능한 리버스 프록시
 ## 왜 만들었나
 
 LLM 기반 에이전트가 등장하면서 취약점 탐색과 공격이 빠르고 값싸게 자동화되고 있습니다. 반면 이를 막는 보안 제품은 대부분 대기업을 위한 것이라 비싸고 운영하려면 전담 인력이 필요합니다.
-l2-buckler는 보안 예산도 담당자도 없는 작은 조직이 설치만으로 기본적인 방어를 갖추게 하는 것을 목표로 합니다.
+smart_buckler는 보안 예산도 담당자도 없는 작은 조직이 설치만으로 기본적인 방어를 갖추게 하는 것을 목표로 합니다.
 
 ## 이런 분들을 위해 만듭니다
 
@@ -56,7 +56,7 @@ report:
     reasoning_effort: "low"    # 추론 모델이 생각하는 정도
 ```
 
-외부 API를 쓰면 제공사는 이 서버가 l2-buckler를 쓴다는 사실과 하루 공격 규모를 알게 됩니다. 설정 방법과 주의할 점은 [시작하기 문서](docs/getting-started.md#ai-요약-선택)에 있습니다.
+외부 API를 쓰면 제공사는 이 서버가 smart_buckler를 쓴다는 사실과 하루 공격 규모를 알게 됩니다. 설정 방법과 주의할 점은 [시작하기 문서](docs/getting-started.md#ai-요약-선택)에 있습니다.
 
 ## 하지 않는 것
 
@@ -80,9 +80,9 @@ Linux 서버에 단일 바이너리로 설치하는 방법입니다. 보호할 �
 Go(버전은 `go.mod` 기준)가 있으면 어디서든 빌드할 수 있습니다. cgo를 쓰지 않으므로 다른 OS에서 Linux용으로 바로 빌드됩니다.
 
 ```sh
-make build                                   # 지금 쓰는 OS용, bin/l2-buckler
+make build                                   # 지금 쓰는 OS용, bin/smart_buckler
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -ldflags "-s -w" -o l2-buckler ./cmd/l2-buckler   # Linux x86_64용
+  go build -trimpath -ldflags "-s -w" -o smart_buckler ./cmd/smart_buckler   # Linux x86_64용
 ```
 
 ARM 서버(`uname -m`이 `aarch64`)라면 `GOARCH=arm64`로 빌드하세요.
@@ -90,22 +90,22 @@ ARM 서버(`uname -m`이 `aarch64`)라면 `GOARCH=arm64`로 빌드하세요.
 ### 2. 서버에 설치
 
 ```sh
-sudo install -m 755 l2-buckler /usr/local/bin/l2-buckler
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin l2-buckler
-sudo mkdir -p /etc/l2-buckler /var/lib/l2-buckler
-sudo chown l2-buckler: /var/lib/l2-buckler
+sudo install -m 755 smart_buckler /usr/local/bin/smart_buckler
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin smart_buckler
+sudo mkdir -p /etc/smart_buckler /var/lib/smart_buckler
+sudo chown smart_buckler: /var/lib/smart_buckler
 ```
 
 ### 3. 설정
 
-`/etc/l2-buckler/l2-buckler.yaml`을 만듭니다. 적지 않은 항목은 기본값을 씁니다. 전체 항목과 설명은 [configs/dev.yaml](configs/dev.yaml)에 있습니다.
+`/etc/smart_buckler/smart_buckler.yaml`을 만듭니다. 적지 않은 항목은 기본값을 씁니다. 전체 항목과 설명은 [configs/dev.yaml](configs/dev.yaml)에 있습니다.
 
 ```yaml
 listen: ":8080"                     # 사용자가 접속할 포트
 upstream: "http://127.0.0.1:3000"   # 보호할 서비스
 
 store:
-  path: "/var/lib/l2-buckler/l2-buckler.db"
+  path: "/var/lib/smart_buckler/smart_buckler.db"
 
 log:
   level: info
@@ -121,8 +121,8 @@ admin:
 알림 토큰이나 API 키를 넣는다면 다른 사용자가 읽지 못하게 권한을 좁힙니다.
 
 ```sh
-sudo chown root:l2-buckler /etc/l2-buckler/l2-buckler.yaml
-sudo chmod 640 /etc/l2-buckler/l2-buckler.yaml
+sudo chown root:smart_buckler /etc/smart_buckler/smart_buckler.yaml
+sudo chmod 640 /etc/smart_buckler/smart_buckler.yaml
 ```
 
 ### 4. 관리자 비밀번호
@@ -130,32 +130,32 @@ sudo chmod 640 /etc/l2-buckler/l2-buckler.yaml
 관리 화면은 비밀번호를 정하기 전까지 닫혀 있습니다. 12자 이상으로 두 번 입력합니다.
 
 ```sh
-sudo -u l2-buckler l2-buckler admin-password -config /etc/l2-buckler/l2-buckler.yaml
+sudo -u smart_buckler smart_buckler admin-password -config /etc/smart_buckler/smart_buckler.yaml
 ```
 
 ### 5. 실행
 
-먼저 앞에 띄워서 확인합니다. 로그에 `l2-buckler started`와 `admin UI started`가 나오면 정상입니다.
+먼저 앞에 띄워서 확인합니다. 로그에 `smart_buckler started`와 `admin UI started`가 나오면 정상입니다.
 
 ```sh
-sudo -u l2-buckler l2-buckler -config /etc/l2-buckler/l2-buckler.yaml
+sudo -u smart_buckler smart_buckler -config /etc/smart_buckler/smart_buckler.yaml
 ```
 
-확인이 끝나면 systemd 서비스로 등록합니다. `/etc/systemd/system/l2-buckler.service`:
+확인이 끝나면 systemd 서비스로 등록합니다. `/etc/systemd/system/smart_buckler.service`:
 
 ```ini
 [Unit]
-Description=l2-buckler reverse proxy
+Description=smart_buckler reverse proxy
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=l2-buckler
-ExecStart=/usr/local/bin/l2-buckler -config /etc/l2-buckler/l2-buckler.yaml
+User=smart_buckler
+ExecStart=/usr/local/bin/smart_buckler -config /etc/smart_buckler/smart_buckler.yaml
 Restart=on-failure
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/l2-buckler
+ReadWritePaths=/var/lib/smart_buckler
 ProtectHome=true
 PrivateTmp=true
 
@@ -165,8 +165,8 @@ WantedBy=multi-user.target
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now l2-buckler
-journalctl -u l2-buckler -f
+sudo systemctl enable --now smart_buckler
+journalctl -u smart_buckler -f
 ```
 
 ### 6. 관리 화면 접속
@@ -198,7 +198,7 @@ curl -s -o /dev/null "http://127.0.0.1:8080/?id=1%27%20OR%201=1--"   # WAF 차�
 | 로그인 화면에 비밀번호가 없다고 나옴 | 4번을 같은 설정 파일(`-config`)로 실행했는지 확인하세요. 비밀번호는 `store.path`의 DB에 저장됩니다. |
 | 421 Misdirected Request | 허용되지 않은 호스트 이름으로 접속했습니다. 터널로 `127.0.0.1:8081`에 접속하거나 `admin.hosts`에 추가하세요. |
 | 로그인이 막힘 | 5번 실패하면 15분 동안 막힙니다. |
-| DB를 열 수 없다는 오류 | `/var/lib/l2-buckler`의 소유자가 `l2-buckler`인지 확인하세요. |
+| DB를 열 수 없다는 오류 | `/var/lib/smart_buckler`의 소유자가 `smart_buckler`인지 확인하세요. |
 
 WAF 차단 모드, 앞단 프록시(`trusted_proxies`), 미끼, 행위 점수, 알림, AI 요약 설정은 [시작하기 문서](docs/getting-started.md)에 있습니다.
 

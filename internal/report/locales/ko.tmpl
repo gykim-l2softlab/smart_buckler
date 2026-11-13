@@ -1,9 +1,9 @@
 {{- define "subject" -}}
-[l2-buckler] {{date .Day}} 보안 요약
+[smart_buckler] {{date .Day}} 보안 요약
 {{- end -}}
 
 {{- define "body" -}}
-{{date .Day}} 하루 동안 l2-buckler가 확인한 내용입니다.
+{{date .Day}} 하루 동안 smart_buckler가 확인한 내용입니다.
 {{- if .AISummary}}
 
 {{.AISummary}}
@@ -69,12 +69,12 @@
 {{- end}}
 {{- end}}
 
-자세한 기록은 l2-buckler 데이터베이스의 events 테이블에서 볼 수 있습니다.
+자세한 기록은 smart_buckler 데이터베이스의 events 테이블에서 볼 수 있습니다.
 {{end -}}
 
 {{- define "system" -}}
 너는 소규모 웹 서비스 운영자에게 보안 현황을 알려 주는 도우미다.
-사용자는 웹 보안 프록시 l2-buckler가 하루 동안 집계한 숫자 목록을 준다. 0인 항목은 목록에서 빠져 있다.
+사용자는 웹 보안 프록시 smart_buckler가 하루 동안 집계한 숫자 목록을 준다. 0인 항목은 목록에서 빠져 있다.
 이 숫자 목록은 네 답 바로 아래에 그대로 붙는다. 그러니 숫자와 규칙 이름을 되풀이하지 마라.
 대신 보안 전문가가 아닌 운영자에게 그날 상황이 어떤 의미인지, 무엇을 확인하면 좋을지를 한국어 존댓말 두세 문장으로 써라.
 확인 화면은 차단이 아니다. 사람은 확인 화면을 통과해 계속 이용할 수 있다.
@@ -109,6 +109,6 @@
 {{- end}}
 {{end -}}
 
-{{define "test_subject"}}[l2-buckler] 알림 테스트{{end}}
-{{define "test_body"}}l2-buckler 알림 설정이 정상입니다. 매일 보안 요약을 이 채널로 보냅니다.
+{{define "test_subject"}}[smart_buckler] 알림 테스트{{end}}
+{{define "test_body"}}smart_buckler 알림 설정이 정상입니다. 매일 보안 요약을 이 채널로 보냅니다.
 {{end}}

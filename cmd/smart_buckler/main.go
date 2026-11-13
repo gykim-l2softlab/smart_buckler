@@ -1,9 +1,9 @@
-// Command l2-buckler runs the reverse proxy.
+// Command smart_buckler runs the reverse proxy.
 //
-//	l2-buckler [-config FILE]                          run the proxy
-//	l2-buckler report [-config FILE] [-date D] [-send] print (or send) a daily report
-//	l2-buckler notify-test [-config FILE]              send a test message to every channel
-//	l2-buckler admin-password [-config FILE]           set the admin UI password
+//	smart_buckler [-config FILE]                          run the proxy
+//	smart_buckler report [-config FILE] [-date D] [-send] print (or send) a daily report
+//	smart_buckler notify-test [-config FILE]              send a test message to every channel
+//	smart_buckler admin-password [-config FILE]           set the admin UI password
 package main
 
 import (
@@ -41,8 +41,8 @@ func main() {
 	if len(args) > 0 && (args[0] == "report" || args[0] == "notify-test" || args[0] == "admin-password") {
 		cmd, args = args[0], args[1:]
 	}
-	fs := flag.NewFlagSet("l2-buckler "+cmd, flag.ExitOnError)
-	configPath := fs.String("config", "l2-buckler.yaml", "path to the configuration file")
+	fs := flag.NewFlagSet("smart_buckler "+cmd, flag.ExitOnError)
+	configPath := fs.String("config", "smart_buckler.yaml", "path to the configuration file")
 	date := fs.String("date", "", "report: day to report (YYYY-MM-DD, default yesterday)")
 	send := fs.Bool("send", false, "report: send through the configured channels instead of printing")
 	_ = fs.Parse(args)
@@ -82,7 +82,7 @@ func main() {
 		})
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "l2-buckler:", err)
+		fmt.Fprintln(os.Stderr, "smart_buckler:", err)
 		os.Exit(1)
 	}
 }
@@ -251,7 +251,7 @@ func run(ctx context.Context, configPath string) error {
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
-	log.Info("l2-buckler started", "listen", cfg.Listen, "upstream", cfg.UpstreamURL().String(),
+	log.Info("smart_buckler started", "listen", cfg.Listen, "upstream", cfg.UpstreamURL().String(),
 		"waf_mode", cfg.WAF.Mode, "score_mode", cfg.Score.Mode,
 		"report_time", cfg.Report.Time, "report_timezone", cfg.ReportLocation().String(), "notify_channels", len(reporter.Notifiers))
 
@@ -324,7 +324,7 @@ func startAdmin(ctx context.Context, cfg config.Config, st *store.Store, bl *res
 	}()
 	attrs := []any{"listen", cfg.Admin.Listen}
 	if set, err := ui.PasswordSet(ctx); err == nil && !set {
-		attrs = append(attrs, "note", "no password yet; run: l2-buckler admin-password")
+		attrs = append(attrs, "note", "no password yet; run: smart_buckler admin-password")
 	}
 	log.Info("admin UI started", attrs...)
 	if host, _, _ := net.SplitHostPort(cfg.Admin.Listen); !isLoopback(host) {

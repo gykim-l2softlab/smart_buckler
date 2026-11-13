@@ -97,7 +97,7 @@ func TestBuildBusyDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Subject != "[l2-buckler] 2026년 10월 31일 보안 요약" {
+	if rep.Subject != "[smart_buckler] 2026년 10월 31일 보안 요약" {
 		t.Errorf("subject = %q", rep.Subject)
 	}
 	if strings.ContainsAny(rep.Body, "\x1b—·") {

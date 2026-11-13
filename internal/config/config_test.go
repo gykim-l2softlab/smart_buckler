@@ -52,13 +52,13 @@ waf:
   mode: block
   request_body_limit: 4096
 store:
-  path: /var/lib/l2-buckler/events.db
+  path: /var/lib/smart_buckler/events.db
 log:
   level: debug
 `,
 			check: func(t *testing.T, c Config) {
 				if c.Listen != ":9000" || c.WAF.Mode != WAFModeBlock || c.WAF.RequestBodyLimit != 4096 ||
-					c.Store.Path != "/var/lib/l2-buckler/events.db" || c.LogLevel() != slog.LevelDebug ||
+					c.Store.Path != "/var/lib/smart_buckler/events.db" || c.LogLevel() != slog.LevelDebug ||
 					len(c.TrustedProxies) != 2 || c.Deception.Enabled || c.Deception.BlockDuration != 10*time.Minute ||
 					len(c.Deception.ReservedPaths) != 2 {
 					t.Errorf("unexpected config: %+v", c)
