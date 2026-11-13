@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - run: go vet ./...
+      - name: test (race)
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+      - name: test
+        if: runner.os == 'Windows'
+        run: go test ./...
+      - name: cross-build release targets
+        if: runner.os == 'Linux'
+        run: |
+          for target in linux/amd64 linux/arm64 windows/amd64; do
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /dev/null ./cmd/smart_buckler
+          done
+
+  # Runs setup as root against a real service account, the way the
+  # installer will, then starts the proxy as that account and runs doctor.
+  setup-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build and install
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/smart_buckler" ./cmd/smart_buckler
+          sudo install -m 755 "$RUNNER_TEMP/smart_buckler" /usr/local/bin/smart_buckler
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin smart_buckler
+      - name: start a service to protect
+        run: |
+          mkdir "$RUNNER_TEMP/site" && echo hello > "$RUNNER_TEMP/site/index.html"
+          python3 -m http.server 3000 --bind 127.0.0.1 -d "$RUNNER_TEMP/site" > /dev/null 2>&1 &
+          sleep 1
+      - name: setup
+        # Answers: upstream port, listen port, default time zone, password.
+        run: printf '3000\n8080\n\ncorrect horse battery\n' | sudo smart_buckler setup
+      - name: file ownership
+        run: |
+          # The data directory is 750, so the glob must expand as root.
+          sudo sh -c "stat -c '%U:%G %a %n' /etc/smart_buckler /etc/smart_buckler/smart_buckler.yaml /var/lib/smart_buckler /var/lib/smart_buckler/*"
+          test "$(sudo stat -c %U:%G /etc/smart_buckler/smart_buckler.yaml)" = root:smart_buckler
+          test "$(sudo stat -c %a /etc/smart_buckler/smart_buckler.yaml)" = 640
+          test "$(sudo stat -c %U /var/lib/smart_buckler)" = smart_buckler
+          test "$(sudo stat -c %U /var/lib/smart_buckler/smart_buckler.db)" = smart_buckler
+      - name: run as the service account and check
+        run: |
+          sudo -u smart_buckler smart_buckler > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for i in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q hello
+          sudo smart_buckler doctor
+          # doctor opened the database as root; the service must still own it.
+          test -z "$(sudo find /var/lib/smart_buckler ! -user smart_buckler)"
+      - name: server log
+        if: always()
+        run: cat "$RUNNER_TEMP/serve.log" || true

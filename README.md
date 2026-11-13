@@ -75,70 +75,52 @@ report:
 
 Linux 서버에 단일 바이너리로 설치하는 방법입니다. 보호할 웹 서비스가 같은 서버의 `127.0.0.1:3000`에서 돌고 있다고 가정합니다.
 
-### 1. 빌드
+### 1. 실행 파일 준비
 
-Go(버전은 `go.mod` 기준)가 있으면 어디서든 빌드할 수 있습니다. cgo를 쓰지 않으므로 다른 OS에서 Linux용으로 바로 빌드됩니다.
+[릴리스 페이지](https://github.com/gykim-l2softlab/smart_buckler/releases)에서 서버에 맞는 파일을 내려받습니다. `uname -m`이 `x86_64`면 `smart_buckler_linux_amd64`, `aarch64`면 `smart_buckler_linux_arm64`입니다. 함께 올라온 `SHA256SUMS`로 파일이 온전한지 확인합니다.
 
 ```sh
-make build                                   # 지금 쓰는 OS용, bin/smart_buckler
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -ldflags "-s -w" -o smart_buckler ./cmd/smart_buckler   # Linux x86_64용
+curl -fLO https://github.com/gykim-l2softlab/smart_buckler/releases/latest/download/smart_buckler_linux_amd64
+curl -fLO https://github.com/gykim-l2softlab/smart_buckler/releases/latest/download/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+mv smart_buckler_linux_amd64 smart_buckler
 ```
 
-ARM 서버(`uname -m`이 `aarch64`)라면 `GOARCH=arm64`로 빌드하세요.
+직접 빌드하려면 Go(버전은 `go.mod` 기준)가 필요합니다. cgo를 쓰지 않으므로 다른 OS에서 Linux용으로 바로 빌드됩니다.
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -trimpath -ldflags "-s -w" -o smart_buckler ./cmd/smart_buckler   # ARM 서버는 GOARCH=arm64
+```
 
 ### 2. 서버에 설치
 
 ```sh
 sudo install -m 755 smart_buckler /usr/local/bin/smart_buckler
+sudo setcap cap_net_bind_service=+ep /usr/local/bin/smart_buckler   # 80번처럼 1024보다 작은 포트를 열 수 있게 합니다
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin smart_buckler
-sudo mkdir -p /etc/smart_buckler /var/lib/smart_buckler
-sudo chown smart_buckler: /var/lib/smart_buckler
 ```
 
-### 3. 설정
+`setcap`이 없다면 `libcap2-bin`(Debian, Ubuntu)이나 `libcap`(RHEL 계열) 패키지를 설치하세요. 실행 파일을 새로 바꿔 넣으면 이 명령을 다시 실행해야 합니다.
 
-`/etc/smart_buckler/smart_buckler.yaml`을 만듭니다. 적지 않은 항목은 기본값을 씁니다. 전체 항목과 설명은 [configs/dev.yaml](configs/dev.yaml)에 있습니다.
+### 3. 설정과 관리자 비밀번호
 
-```yaml
-listen: ":8080"                     # 사용자가 접속할 포트
-upstream: "http://127.0.0.1:3000"   # 보호할 서비스
-
-store:
-  path: "/var/lib/smart_buckler/smart_buckler.db"
-
-log:
-  level: info
-
-report:
-  timezone: "Asia/Seoul"
-
-admin:
-  enabled: true
-  listen: "127.0.0.1:8081"          # 관리 화면. 서버 안에서만 열립니다
-```
-
-알림 토큰이나 API 키를 넣는다면 다른 사용자가 읽지 못하게 권한을 좁힙니다.
+몇 가지 질문에 답하면 설정 파일(`/etc/smart_buckler/smart_buckler.yaml`)과 관리자 비밀번호(12자 이상)가 만들어집니다. 보호할 서비스에 실제로 연결되는지, 포트가 비어 있는지도 그 자리에서 확인합니다.
 
 ```sh
-sudo chown root:smart_buckler /etc/smart_buckler/smart_buckler.yaml
-sudo chmod 640 /etc/smart_buckler/smart_buckler.yaml
+sudo smart_buckler setup
 ```
 
-### 4. 관리자 비밀번호
+이 서버에서 Nginx나 Apache가 이미 80/443 포트를 쓰고 있으면, 그 웹 서버 뒤에 두는 방식을 권합니다. 이때 setup은 `trusted_proxies`를 설정하고 웹 서버에 붙여 넣을 설정을 보여 줍니다. 파일 권한도 setup이 맞춰 둡니다. 설정 파일은 `root:smart_buckler` 640이고, `/var/lib/smart_buckler`는 `smart_buckler` 계정이 소유합니다.
 
-관리 화면은 비밀번호를 정하기 전까지 닫혀 있습니다. 12자 이상으로 두 번 입력합니다.
+설정 파일을 직접 쓰고 싶다면 [configs/dev.yaml](configs/dev.yaml)에 전체 항목과 설명이 있습니다. 비밀번호는 언제든 `sudo smart_buckler admin-password`로 다시 정할 수 있습니다.
 
-```sh
-sudo -u smart_buckler smart_buckler admin-password -config /etc/smart_buckler/smart_buckler.yaml
-```
+### 4. 실행
 
-### 5. 실행
-
-먼저 앞에 띄워서 확인합니다. 로그에 `smart_buckler started`와 `admin UI started`가 나오면 정상입니다.
+먼저 앞에 띄워서 확인합니다. 로그에 `smart_buckler started`와 `admin UI started`가 나오면 정상입니다. `-config`를 생략하면 `/etc/smart_buckler/smart_buckler.yaml`을 읽습니다.
 
 ```sh
-sudo -u smart_buckler smart_buckler -config /etc/smart_buckler/smart_buckler.yaml
+sudo -u smart_buckler smart_buckler
 ```
 
 확인이 끝나면 systemd 서비스로 등록합니다. `/etc/systemd/system/smart_buckler.service`:
@@ -169,7 +151,7 @@ sudo systemctl enable --now smart_buckler
 journalctl -u smart_buckler -f
 ```
 
-### 6. 관리 화면 접속
+### 5. 관리 화면 접속
 
 관리 화면은 서버 자신에게서만 열려 있습니다. 내 컴퓨터에서 SSH 터널을 연 뒤 브라우저로 `http://127.0.0.1:8081`에 접속합니다.
 
@@ -179,9 +161,9 @@ ssh -N -L 8081:127.0.0.1:8081 사용자@서버
 
 TLS 리버스 프록시를 앞에 두고 도메인으로 접속하려면 그 호스트 이름을 `admin.hosts`에 적으세요.
 
-### 7. 동작 확인
+### 6. 동작 확인
 
-서버 안에서 아래 요청을 보내면 관리 화면의 이벤트와 차트에 기록이 나타납니다.
+`sudo smart_buckler doctor`로 전체 상태를 점검합니다. 이어서 서버 안에서 아래 요청을 보내면 관리 화면의 이벤트와 차트에 기록이 나타납니다. 8080은 setup에서 정한 포트로 바꾸세요.
 
 ```sh
 curl -s -o /dev/null http://127.0.0.1:8080/
@@ -192,10 +174,16 @@ curl -s -o /dev/null "http://127.0.0.1:8080/?id=1%27%20OR%201=1--"   # WAF 차�
 
 ### 문제가 생기면
 
+먼저 상태 점검을 실행하세요. 설정, 서비스, 보호할 서비스 연결, 관리 화면, DB 권한을 차례로 확인하고 문제마다 해결 방법을 알려 줍니다.
+
+```sh
+sudo smart_buckler doctor
+```
+
 | 증상 | 확인할 것 |
 |---|---|
 | `address already in use` | `listen`이나 `admin.listen` 포트를 다른 프로세스가 쓰고 있습니다. |
-| 로그인 화면에 비밀번호가 없다고 나옴 | 4번을 같은 설정 파일(`-config`)로 실행했는지 확인하세요. 비밀번호는 `store.path`의 DB에 저장됩니다. |
+| 로그인 화면에 비밀번호가 없다고 나옴 | `admin-password`를 같은 설정 파일(`-config`)로 실행했는지 확인하세요. 비밀번호는 `store.path`의 DB에 저장됩니다. |
 | 421 Misdirected Request | 허용되지 않은 호스트 이름으로 접속했습니다. 터널로 `127.0.0.1:8081`에 접속하거나 `admin.hosts`에 추가하세요. |
 | 로그인이 막힘 | 5번 실패하면 15분 동안 막힙니다. |
 | DB를 열 수 없다는 오류 | `/var/lib/smart_buckler`의 소유자가 `smart_buckler`인지 확인하세요. |

@@ -4,6 +4,13 @@
 //	smart_buckler report [-config FILE] [-date D] [-send] print (or send) a daily report
 //	smart_buckler notify-test [-config FILE]              send a test message to every channel
 //	smart_buckler admin-password [-config FILE]           set the admin UI password
+//	smart_buckler setup [-config FILE] [-force]           create the configuration interactively
+//	smart_buckler doctor [-config FILE]                   check the installation
+//	smart_buckler version                                 print the version
+//
+// Without -config, smart_buckler.yaml in the current directory is used if it
+// exists, otherwise the installed location (/etc/smart_buckler on Linux,
+// %ProgramData%\smart_buckler on Windows).
 package main
 
 import (
@@ -16,7 +23,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
+	"slices"
 	"syscall"
 	"time"
 	_ "time/tzdata" // report.timezone works in minimal containers without zoneinfo
@@ -30,6 +39,7 @@ import (
 	"github.com/gykim-l2softlab/smart_buckler/internal/response"
 	"github.com/gykim-l2softlab/smart_buckler/internal/score"
 	"github.com/gykim-l2softlab/smart_buckler/internal/session"
+	"github.com/gykim-l2softlab/smart_buckler/internal/setup"
 	"github.com/gykim-l2softlab/smart_buckler/internal/store"
 	"github.com/gykim-l2softlab/smart_buckler/internal/waf"
 )
@@ -38,14 +48,22 @@ const shutdownTimeout = 15 * time.Second
 
 func main() {
 	cmd, args := "serve", os.Args[1:]
-	if len(args) > 0 && (args[0] == "report" || args[0] == "notify-test" || args[0] == "admin-password") {
+	if len(args) > 0 && slices.Contains(commands, args[0]) {
 		cmd, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("smart_buckler "+cmd, flag.ExitOnError)
-	configPath := fs.String("config", "smart_buckler.yaml", "path to the configuration file")
+	configFlag := fs.String("config", setup.ConfigName, "path to the configuration file")
 	date := fs.String("date", "", "report: day to report (YYYY-MM-DD, default yesterday)")
 	send := fs.Bool("send", false, "report: send through the configured channels instead of printing")
+	force := fs.Bool("force", false, "setup: replace an existing configuration")
+	ownerName := fs.String("user", setup.ServiceUser, "setup, doctor, admin-password: service account that owns the database")
 	_ = fs.Parse(args)
+	configSet := false
+	fs.Visit(func(f *flag.Flag) { configSet = configSet || f.Name == "config" })
+	configPath := setup.ResolveConfig(*configFlag, configSet, runtime.GOOS, os.Getenv, func(p string) bool {
+		_, err := os.Stat(p)
+		return err == nil
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -53,9 +71,9 @@ func main() {
 	var err error
 	switch cmd {
 	case "serve":
-		err = run(ctx, *configPath)
+		err = run(ctx, configPath)
 	case "report":
-		err = withReporter(ctx, *configPath, func(g *report.Generator) error {
+		err = withReporter(ctx, configPath, func(g *report.Generator) error {
 			day := *date
 			if day == "" {
 				day = g.Yesterday()
@@ -71,9 +89,15 @@ func main() {
 			return checkSent(g, g.Send(ctx, rep))
 		})
 	case "admin-password":
-		err = setAdminPassword(ctx, *configPath)
+		err = setAdminPassword(ctx, configPath, *ownerName)
+	case "setup":
+		err = runSetup(ctx, configPath, *ownerName, *force)
+	case "doctor":
+		err = runDoctor(ctx, configPath, *ownerName)
+	case "version":
+		fmt.Println(version())
 	case "notify-test":
-		err = withReporter(ctx, *configPath, func(g *report.Generator) error {
+		err = withReporter(ctx, configPath, func(g *report.Generator) error {
 			msg, err := g.TestMessage()
 			if err != nil {
 				return err
@@ -82,10 +106,15 @@ func main() {
 		})
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "smart_buckler:", err)
+		if !errors.Is(err, errReported) {
+			fmt.Fprintln(os.Stderr, "smart_buckler:", err)
+		}
 		os.Exit(1)
 	}
 }
+
+// commands are the subcommands; anything else runs the proxy.
+var commands = []string{"report", "notify-test", "admin-password", "setup", "doctor", "version"}
 
 // withReporter runs fn with a report generator on the configured store.
 func withReporter(ctx context.Context, configPath string, fn func(*report.Generator) error) error {
