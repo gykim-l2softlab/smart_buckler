@@ -63,7 +63,8 @@ jobs:
         run: printf '3000\n8080\n\ncorrect horse battery\n' | sudo smart_buckler setup
       - name: file ownership
         run: |
-          sudo stat -c '%U:%G %a %n' /etc/smart_buckler /etc/smart_buckler/smart_buckler.yaml /var/lib/smart_buckler /var/lib/smart_buckler/*
+          # The data directory is 750, so the glob must expand as root.
+          sudo sh -c "stat -c '%U:%G %a %n' /etc/smart_buckler /etc/smart_buckler/smart_buckler.yaml /var/lib/smart_buckler /var/lib/smart_buckler/*"
           test "$(sudo stat -c %U:%G /etc/smart_buckler/smart_buckler.yaml)" = root:smart_buckler
           test "$(sudo stat -c %a /etc/smart_buckler/smart_buckler.yaml)" = 640
           test "$(sudo stat -c %U /var/lib/smart_buckler)" = smart_buckler

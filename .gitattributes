@@ -1,2 +1,6 @@
+# Check out text as LF on every OS: templates and golden files are embedded
+# or compared byte for byte, and Windows would otherwise get CRLF.
+* text=auto eol=lf
+
 # Raw HTTP fixtures: keep CRLF bytes exact (Content-Length depends on them)
 *.http -text
