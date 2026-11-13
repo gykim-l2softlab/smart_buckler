@@ -15,6 +15,8 @@ make build
 
 ## 설정
 
+`smart_buckler setup`을 실행하면 질문 몇 개에 답하는 것으로 설정 파일과 관리자 비밀번호가 만들어집니다. 보호할 서비스 연결과 포트도 그 자리에서 확인합니다. 아래는 직접 쓰거나 고칠 때를 위한 설명입니다.
+
 YAML 파일 하나로 설정합니다. 꼭 적어야 하는 값은 `upstream` 하나뿐입니다.
 
 ```yaml
@@ -153,6 +155,16 @@ score:
 ```
 
 로그는 JSON 형식으로 표준 출력에 나옵니다. 종료 신호(SIGTERM, Ctrl+C)를 받으면 처리 중인 요청을 마치고, 남은 이벤트를 저장한 다음 종료합니다.
+
+`-config`를 생략하면 현재 폴더의 `smart_buckler.yaml`을 읽고, 없으면 설치 위치(Linux는 `/etc/smart_buckler/smart_buckler.yaml`, Windows는 `%ProgramData%\smart_buckler\smart_buckler.yaml`)를 읽습니다. 다른 명령도 같습니다.
+
+### 상태 점검
+
+```sh
+./bin/smart_buckler doctor -config /etc/smart_buckler/smart_buckler.yaml
+```
+
+설정 파일, 서비스(systemd), 보호할 서비스 연결, 프록시를 거친 요청, 관리 화면과 비밀번호, DB 파일 소유자를 확인합니다. 문제가 있으면 해결 방법을 함께 보여 주고 종료 코드 1로 끝납니다. 앞단 웹 서버 뒤에 있는데 `trusted_proxies`가 비어 있는 것처럼 모든 방문자가 함께 차단될 수 있는 설정도 알려 줍니다.
 
 ## 이벤트 확인
 
